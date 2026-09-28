@@ -36,7 +36,7 @@ func TestTools(t *testing.T) {
 		got = append(got, tl.Name)
 	}
 	slices.Sort(got)
-	want := []string{"check_login", "get_schulaufgaben", "get_schwarzes_brett", "get_vertretungsplan"}
+	want := []string{"check_login", "get_elternbrief", "get_schulaufgaben", "get_schwarzes_brett", "get_vertretungsplan", "list_elternbriefe"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
