@@ -1,0 +1,175 @@
+package portal
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"sync"
+	"testing"
+
+	"github.com/PuerkitoBio/goquery"
+)
+
+const loginPage = `<html><form class="form-signin"><input type="hidden" name="csrf" value="tok"></form></html>`
+
+// fakePortal mimics the portal's session handling: unknown or expired
+// sessions get the login page with HTTP 200, like the real one.
+type fakePortal struct {
+	*httptest.Server
+	mu     sync.Mutex
+	valid  map[string]bool
+	logins int
+	pages  map[string]string
+}
+
+func newFakePortal(t *testing.T, pages map[string]string) *fakePortal {
+	t.Helper()
+	f := &fakePortal{valid: map[string]bool{}, pages: pages}
+	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
+	t.Cleanup(f.Close)
+	return f
+}
+
+func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if r.URL.Path == "/includes/project/auth/login.php" {
+		f.logins++
+		if r.FormValue("csrf") != "tok" || r.FormValue("username") != "u" || r.FormValue("password") != "p" {
+			io.WriteString(w, loginPage)
+			return
+		}
+		sid := fmt.Sprint("s", f.logins)
+		f.valid[sid] = true
+		http.SetCookie(w, &http.Cookie{Name: "sid", Value: sid, Path: "/"})
+		http.Redirect(w, r, "/start", http.StatusFound)
+		return
+	}
+	if ck, err := r.Cookie("sid"); err != nil || !f.valid[ck.Value] {
+		io.WriteString(w, loginPage)
+		return
+	}
+	body, ok := f.pages[r.URL.Path]
+	if !ok {
+		body = "<html>start</html>"
+	}
+	ct := "text/html; charset=utf-8"
+	if strings.HasPrefix(body, "%PDF") {
+		ct = "application/pdf"
+	}
+	w.Header().Set("Content-Type", ct)
+	io.WriteString(w, body)
+}
+
+func (f *fakePortal) expire() {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	clear(f.valid)
+}
+
+func (f *fakePortal) client(password string) *Client {
+	return New(Config{URL: f.URL, User: "u", Password: password})
+}
+
+func fixture(t *testing.T, name string) *goquery.Selection {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join("testdata", name))
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := content(b, "text/html; charset=utf-8", name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+const okPage = `<html><div id="asam_content"><p>Hallo</p></div></html>`
+
+func TestPage(t *testing.T) {
+	f := newFakePortal(t, map[string]string{"/x": okPage})
+	s, err := f.client("p").page(context.Background(), "/x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := text(s); got != "Hallo" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestReloginOnExpiry(t *testing.T) {
+	f := newFakePortal(t, map[string]string{"/x": okPage})
+	c := f.client("p")
+	ctx := context.Background()
+	if _, err := c.page(ctx, "/x"); err != nil {
+		t.Fatal(err)
+	}
+	f.expire()
+	if _, err := c.page(ctx, "/x"); err != nil {
+		t.Fatal(err)
+	}
+	if f.logins != 2 {
+		t.Fatalf("logins = %d, want 2", f.logins)
+	}
+}
+
+func TestBadPassword(t *testing.T) {
+	f := newFakePortal(t, nil)
+	err := f.client("falsch").CheckLogin(context.Background())
+	if !errors.Is(err, ErrLogin) {
+		t.Fatalf("err = %v, want ErrLogin", err)
+	}
+	if f.logins != 1 {
+		t.Fatalf("logins = %d, want 1", f.logins)
+	}
+	if strings.Contains(err.Error(), "falsch") {
+		t.Fatal("error leaks password")
+	}
+}
+
+func TestMissingContent(t *testing.T) {
+	f := newFakePortal(t, nil)
+	_, err := f.client("p").page(context.Background(), "/leer")
+	if err == nil || !strings.Contains(err.Error(), "/leer") {
+		t.Fatalf("err = %v, want mention of /leer", err)
+	}
+}
+
+func TestContentLatin1(t *testing.T) {
+	b := []byte("<html><div id=\"asam_content\">Pr\xfcfung</div></html>")
+	s, err := content(b, "text/html; charset=iso-8859-1", "x")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := text(s); got != "Prüfung" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestText(t *testing.T) {
+	b := []byte(`<div id="asam_content"><h4> A </h4><p>b<br>c</p>  </div>`)
+	s, _ := content(b, "", "x")
+	if got := text(s); got != "A\nb\nc" {
+		t.Fatalf("got %q", got)
+	}
+}
+
+func TestResolve(t *testing.T) {
+	c := New(Config{URL: "https://x.eltern-portal.org"})
+	for href, want := range map[string]string{
+		"aktuelles/get_file/?repo=1":        "/aktuelles/get_file/?repo=1",
+		"/aktuelles/get_file/?repo=1":       "/aktuelles/get_file/?repo=1",
+		"https://x.eltern-portal.org/a?b=1": "/a?b=1",
+	} {
+		got, err := c.resolve(href)
+		if err != nil || got != want {
+			t.Errorf("resolve(%q) = %q, %v; want %q", href, got, err, want)
+		}
+	}
+}
