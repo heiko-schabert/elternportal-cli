@@ -173,3 +173,14 @@ func TestResolve(t *testing.T) {
 		}
 	}
 }
+
+func TestContentModulAus(t *testing.T) {
+	b, err := os.ReadFile("testdata/modul_aus.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = content(b, "text/html; charset=utf-8", "/service/vertretungsplan")
+	if err == nil || !strings.Contains(err.Error(), "nicht aktiv") {
+		t.Fatalf("err = %v, want module-inactive error", err)
+	}
+}

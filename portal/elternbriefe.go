@@ -36,11 +36,9 @@ type ElternbriefInhalt struct {
 }
 
 var (
-	nrRe       = regexp.MustCompile(`#(\d+)`)
-	zeitRe     = regexp.MustCompile(`\d{2}\.\d{2}\.\d{4}\s+\d{2}:\d{2}:\d{2}`)
-	klassenRe  = regexp.MustCompile(`Klasse/n:\s*(.+)`)
-	klassenLRe = regexp.MustCompile(`Klasse/n:.*`)
-	hinweisRe  = regexp.MustCompile(`\(keine Datei.*?bestätigen\)`)
+	nrRe      = regexp.MustCompile(`#(\d+)`)
+	zeitRe    = regexp.MustCompile(`\d{2}\.\d{2}\.\d{4},?\s+\d{2}:\d{2}(:\d{2})?`)
+	klassenRe = regexp.MustCompile(`Klasse/n:\s*(.+)`)
 )
 
 func (c *Client) Elternbriefe(ctx context.Context) (Elternbriefe, error) {
@@ -52,7 +50,8 @@ func (c *Client) Elternbriefe(ctx context.Context) (Elternbriefe, error) {
 }
 
 // parseElternbriefe reads row pairs: a header row with "#Nr" and status,
-// then a body row with title, date, classes and either a file link or inline text.
+// then a body row with title, date, classes, an optional file link and the
+// letter text as paragraphs.
 func parseElternbriefe(s *goquery.Selection) []Elternbrief {
 	out := []Elternbrief{}
 	rows := s.Find("table.ui tr")
@@ -78,13 +77,7 @@ func parseElternbriefe(s *goquery.Selection) []Elternbrief {
 		if m := klassenRe.FindStringSubmatch(body.Find("span.small").Text()); m != nil {
 			b.Klassen = strings.TrimSpace(m[1])
 		}
-		if !b.HatDatei {
-			t := strings.Replace(text(body), b.Titel, "", 1)
-			t = strings.Replace(t, b.Datum, "", 1)
-			t = hinweisRe.ReplaceAllString(t, "")
-			t = klassenLRe.ReplaceAllString(t, "")
-			b.inline = strings.TrimSpace(t)
-		}
+		b.inline = text(body.Find("p"))
 		out = append(out, b)
 	}
 	return out

@@ -12,9 +12,9 @@ import (
 func TestParseElternbriefe(t *testing.T) {
 	got := parseElternbriefe(fixture(t, "elternbriefe.html"))
 	want := []Elternbrief{
-		{Nummer: 134, Titel: "Wandertag", Datum: "20.09.2026 17:30:00", Klassen: "6C, 6D", HatDatei: true, downloadURL: "aktuelles/get_file/?repo=134"},
-		{Nummer: 133, Titel: "Elternabend", Datum: "15.09.2026 08:00:00", Klassen: "6C", Bestaetigt: true, inline: "Der Elternabend findet am 1.10. statt."},
-		{Nummer: 120, Titel: "Elternabend Nachtrag", Datum: "01.09.2026 08:00:00", Klassen: "6C", Bestaetigt: true, inline: "Raum 101."},
+		{Nummer: 134, Titel: "Wandertag", Datum: "20.09.2026, 17:30", Klassen: "6C, 6D", HatDatei: true, downloadURL: "aktuelles/get_file/?repo=134&csrf=c0ffee", inline: "Anbei die Infos zum Wandertag."},
+		{Nummer: 133, Titel: "Elternabend", Datum: "15.09.2026, 08:00", Klassen: "6C", Bestaetigt: true, inline: "Sehr geehrte Eltern,\nder Elternabend findet am 1.10. statt.\nMit freundlichen Grüßen\ni.A."},
+		{Nummer: 120, Titel: "Elternabend Nachtrag", Datum: "01.09.2026, 08:00", Klassen: "6C", Bestaetigt: true, inline: "Raum 101."},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
@@ -54,7 +54,7 @@ func TestElternbriefInline(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Inhalt != "Der Elternabend findet am 1.10. statt." {
+	if got.Inhalt != "Sehr geehrte Eltern,\nder Elternabend findet am 1.10. statt.\nMit freundlichen Grüßen\ni.A." {
 		t.Fatalf("got %q", got.Inhalt)
 	}
 }

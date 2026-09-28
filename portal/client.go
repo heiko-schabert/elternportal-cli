@@ -167,6 +167,10 @@ func content(b []byte, contentType, path string) (*goquery.Selection, error) {
 	if s.Length() == 0 {
 		return nil, fmt.Errorf("%s: #asam_content fehlt, Portal-Layout geändert?", path)
 	}
+	// Schools can disable modules; the page then renders an empty frame.
+	if s.Children().Length() == 0 && strings.TrimSpace(s.Text()) == "" {
+		return nil, fmt.Errorf("%s: Seite leer, Modul an dieser Schule nicht aktiv", path)
+	}
 	return s, nil
 }
 

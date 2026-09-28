@@ -8,8 +8,10 @@ import (
 )
 
 type Aushang struct {
-	Titel string `json:"titel"`
-	Text  string `json:"text"`
+	Titel    string `json:"titel"`
+	Zeitraum string `json:"zeitraum,omitempty"`
+	Text     string `json:"text"`
+	Archiv   bool   `json:"archiv,omitempty"`
 }
 
 type SchwarzesBrett struct {
@@ -34,6 +36,17 @@ func parseSchwarzesBrett(s *goquery.Selection) SchwarzesBrett {
 		}
 		t := strings.TrimSpace(strings.TrimPrefix(text(body), titel))
 		out.Aushaenge = append(out.Aushaenge, Aushang{Titel: titel, Text: t})
+	})
+	// Expired notices move to a collapsed archive as wells: first row date
+	// range and title, second row body.
+	s.Find("div.well").Each(func(_ int, well *goquery.Selection) {
+		rows := well.ChildrenFiltered("div.row")
+		out.Aushaenge = append(out.Aushaenge, Aushang{
+			Titel:    norm(rows.Eq(0).Find("h4").Text()),
+			Zeitraum: norm(rows.Eq(0).Find("p").First().Text()),
+			Text:     text(rows.Eq(1)),
+			Archiv:   well.ParentsFiltered(".arch").Length() > 0,
+		})
 	})
 	return out
 }
