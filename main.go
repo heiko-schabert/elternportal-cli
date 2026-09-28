@@ -39,6 +39,8 @@ func newServer(c *portal.Client) *mcp.Server {
 		func(ctx context.Context, _ none) (portal.Schulaufgaben, error) { return c.Schulaufgaben(ctx) })
 	tool(s, "get_schwarzes_brett", "Aushänge vom Schwarzen Brett (Titel, Text).",
 		func(ctx context.Context, _ none) (portal.SchwarzesBrett, error) { return c.SchwarzesBrett(ctx) })
+	tool(s, "get_vertretungsplan", "Vertretungsplan: Stand und Tage mit Vertretungen (Stunde, betroffene Lehrkraft, Vertretung, entfallenes Fach, Fach, Raum, Info).",
+		func(ctx context.Context, _ none) (portal.Vertretungsplan, error) { return c.Vertretungsplan(ctx) })
 	return s
 }
 
