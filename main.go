@@ -41,8 +41,10 @@ func newServer(c *portal.Client) *mcp.Server {
 			return loginStatus{Status: "ok"}, nil
 		})
 	tool(s, "get_schulaufgaben", "Schulaufgaben- und Prüfungstermine der Klasse (Datum, Beschreibung).",
-		func(ctx context.Context, _ none) (portal.Schulaufgaben, error) { return c.Schulaufgaben(ctx) })
-	tool(s, "get_schwarzes_brett", "Aushänge vom Schwarzen Brett (Titel, Text).",
+		func(ctx context.Context, _ none) (portal.Termine, error) { return c.Schulaufgaben(ctx) })
+	tool(s, "get_termine", "Allgemeine Schultermine (Ferien, Veranstaltungen): Datum, Zeit, Beschreibung.",
+		func(ctx context.Context, _ none) (portal.Termine, error) { return c.Termine(ctx) })
+	tool(s, "get_schwarzes_brett", "Aushänge vom Schwarzen Brett (Titel, Zeitraum, Text; archiv=true für abgelaufene).",
 		func(ctx context.Context, _ none) (portal.SchwarzesBrett, error) { return c.SchwarzesBrett(ctx) })
 	tool(s, "get_vertretungsplan", "Vertretungsplan: Stand und Tage mit Vertretungen (Stunde, betroffene Lehrkraft, Vertretung, entfallenes Fach, Fach, Raum, Info).",
 		func(ctx context.Context, _ none) (portal.Vertretungsplan, error) { return c.Vertretungsplan(ctx) })

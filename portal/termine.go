@@ -3,18 +3,18 @@ package portal
 import (
 	"context"
 	"regexp"
-	"strings"
 
 	"github.com/PuerkitoBio/goquery"
 )
 
 type Termin struct {
 	Datum        string `json:"datum"`
+	Zeit         string `json:"zeit,omitempty"`
 	Beschreibung string `json:"beschreibung"`
 }
 
-type Schulaufgaben struct {
-	Klasse  string   `json:"klasse"`
+type Termine struct {
+	Klasse  string   `json:"klasse,omitempty"`
 	Termine []Termin `json:"termine"`
 }
 
@@ -23,16 +23,24 @@ var (
 	datumRe  = regexp.MustCompile(`^\d{2}\.\d{2}\.\d{4}`)
 )
 
-func (c *Client) Schulaufgaben(ctx context.Context) (Schulaufgaben, error) {
-	s, err := c.page(ctx, "/service/termine/liste/schulaufgaben")
-	if err != nil {
-		return Schulaufgaben{}, err
-	}
-	return parseSchulaufgaben(s), nil
+func (c *Client) Schulaufgaben(ctx context.Context) (Termine, error) {
+	return c.termine(ctx, "/service/termine/liste/schulaufgaben")
 }
 
-func parseSchulaufgaben(s *goquery.Selection) Schulaufgaben {
-	out := Schulaufgaben{Termine: []Termin{}}
+func (c *Client) Termine(ctx context.Context) (Termine, error) {
+	return c.termine(ctx, "/service/termine/liste/allgemein")
+}
+
+func (c *Client) termine(ctx context.Context, path string) (Termine, error) {
+	s, err := c.page(ctx, path)
+	if err != nil {
+		return Termine{}, err
+	}
+	return parseTermine(s), nil
+}
+
+func parseTermine(s *goquery.Selection) Termine {
+	out := Termine{Termine: []Termin{}}
 	// Class only appears in the active tab label, e.g. "Schulaufgabenplan (6C)".
 	if m := klasseRe.FindStringSubmatch(s.Find("a.active").First().Text()); m != nil {
 		out.Klasse = m[1]
@@ -43,10 +51,10 @@ func parseSchulaufgaben(s *goquery.Selection) Schulaufgaben {
 		if td.Length() < 3 {
 			return
 		}
-		datum := strings.TrimSpace(td.Eq(0).Text())
-		desc := strings.TrimSpace(td.Eq(2).Text())
+		datum := norm(td.Eq(0).Text())
+		desc := text(td.Eq(2))
 		if datumRe.MatchString(datum) && desc != "" {
-			out.Termine = append(out.Termine, Termin{Datum: datum, Beschreibung: desc})
+			out.Termine = append(out.Termine, Termin{Datum: datum, Zeit: norm(td.Eq(1).Text()), Beschreibung: desc})
 		}
 	})
 	return out
