@@ -13,6 +13,7 @@ import (
 type none struct{}
 
 type briefArgs struct {
+	kindArg
 	Nummer int    `json:"nummer,omitempty" jsonschema:"Nummer des Elternbriefs, z.B. 134"`
 	Titel  string `json:"titel,omitempty" jsonschema:"Teil des Titels, Groß/Klein egal"`
 }
@@ -21,11 +22,25 @@ type loginStatus struct {
 	Status string `json:"status"`
 }
 
-// tool hides the SDK's result plumbing; the SDK renders Out as structured
-// content plus JSON text, and a returned error as an IsError result.
-func tool[In, Out any](s *mcp.Server, name, desc string, fn func(context.Context, In) (Out, error)) {
+type kindArg struct {
+	Kind string `json:"kind,omitempty" jsonschema:"Vorname des Kindes; nur bei mehreren Kindern nötig"`
+}
+
+func (k kindArg) kindName() string { return k.Kind }
+
+// tool hides the SDK's result plumbing and, for inputs embedding kindArg,
+// selects the child for the duration of the call.
+func tool[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, fn func(context.Context, In) (Out, error)) {
 	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+			if k, ok := any(in).(interface{ kindName() string }); ok {
+				release, err := c.UseKind(ctx, k.kindName())
+				if err != nil {
+					var zero Out
+					return nil, zero, err
+				}
+				defer release()
+			}
 			out, err := fn(ctx, in)
 			return nil, out, err
 		})
@@ -33,27 +48,29 @@ func tool[In, Out any](s *mcp.Server, name, desc string, fn func(context.Context
 
 func newServer(c *portal.Client) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "elternportal", Version: "v0.1.0"}, nil)
-	tool(s, "check_login", "Prüft, ob Login ins Eltern-Portal funktioniert.",
+	tool(s, c, "check_login", "Prüft, ob Login ins Eltern-Portal funktioniert.",
 		func(ctx context.Context, _ none) (loginStatus, error) {
 			if err := c.CheckLogin(ctx); err != nil {
 				return loginStatus{}, err
 			}
 			return loginStatus{Status: "ok"}, nil
 		})
-	tool(s, "get_schulaufgaben", "Schulaufgaben- und Prüfungstermine der Klasse (Datum, Beschreibung).",
-		func(ctx context.Context, _ none) (portal.Termine, error) { return c.Schulaufgaben(ctx) })
-	tool(s, "get_termine", "Allgemeine Schultermine (Ferien, Veranstaltungen): Datum, Zeit, Beschreibung.",
+	tool(s, c, "get_schulaufgaben", "Schulaufgaben- und Prüfungstermine der Klasse (Datum, Beschreibung).",
+		func(ctx context.Context, _ kindArg) (portal.Termine, error) { return c.Schulaufgaben(ctx) })
+	tool(s, c, "get_termine", "Allgemeine Schultermine (Ferien, Veranstaltungen): Datum, Zeit, Beschreibung.",
 		func(ctx context.Context, _ none) (portal.Termine, error) { return c.Termine(ctx) })
-	tool(s, "get_schwarzes_brett", "Aushänge vom Schwarzen Brett (Titel, Zeitraum, Text; archiv=true für abgelaufene).",
+	tool(s, c, "get_schwarzes_brett", "Aushänge vom Schwarzen Brett (Titel, Zeitraum, Text; archiv=true für abgelaufene).",
 		func(ctx context.Context, _ none) (portal.SchwarzesBrett, error) { return c.SchwarzesBrett(ctx) })
-	tool(s, "get_vertretungsplan", "Vertretungsplan: Stand und Tage mit Vertretungen (Stunde, betroffene Lehrkraft, Vertretung, entfallenes Fach, Fach, Raum, Info).",
-		func(ctx context.Context, _ none) (portal.Vertretungsplan, error) { return c.Vertretungsplan(ctx) })
-	tool(s, "list_elternbriefe", "Elternbriefe mit Nummer, Titel, Datum, Klassen, Bestätigungsstatus und ob eine Datei anhängt.",
-		func(ctx context.Context, _ none) (portal.Elternbriefe, error) { return c.Elternbriefe(ctx) })
-	tool(s, "get_elternbrief", "Inhalt eines Elternbriefs als Text. nummer (exakt) oder titel (Teilstring, neuester Treffer) angeben.",
+	tool(s, c, "get_vertretungsplan", "Vertretungsplan: Stand und Tage mit Vertretungen (Stunde, betroffene Lehrkraft, Vertretung, entfallenes Fach, Fach, Raum, Info).",
+		func(ctx context.Context, _ kindArg) (portal.Vertretungsplan, error) { return c.Vertretungsplan(ctx) })
+	tool(s, c, "list_elternbriefe", "Elternbriefe mit Nummer, Titel, Datum, Klassen, Bestätigungsstatus und ob eine Datei anhängt.",
+		func(ctx context.Context, _ kindArg) (portal.Elternbriefe, error) { return c.Elternbriefe(ctx) })
+	tool(s, c, "get_elternbrief", "Inhalt eines Elternbriefs als Text. nummer (exakt) oder titel (Teilstring, neuester Treffer) angeben.",
 		func(ctx context.Context, in briefArgs) (portal.ElternbriefInhalt, error) {
 			return c.Elternbrief(ctx, in.Nummer, in.Titel)
 		})
+	tool(s, c, "list_kinder", "Kinder im Account (ID, Name, Klasse). Namen für den kind-Parameter anderer Tools.",
+		func(ctx context.Context, _ none) (portal.Kinder, error) { return c.Kinder(ctx) })
 	return s
 }
 

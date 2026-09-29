@@ -26,6 +26,7 @@ type fakePortal struct {
 	valid  map[string]bool
 	logins int
 	pages  map[string]string
+	child  string
 }
 
 func newFakePortal(t *testing.T, pages map[string]string) *fakePortal {
@@ -47,6 +48,7 @@ func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
 		}
 		sid := fmt.Sprint("s", f.logins)
 		f.valid[sid] = true
+		f.child = "1906"
 		http.SetCookie(w, &http.Cookie{Name: "sid", Value: sid, Path: "/"})
 		http.Redirect(w, r, "/start", http.StatusFound)
 		return
@@ -55,9 +57,18 @@ func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, loginPage)
 		return
 	}
+	switch r.URL.Path {
+	case "/api/set_child.php":
+		f.child = r.URL.Query().Get("id")
+		io.WriteString(w, "1")
+		return
+	case "/wer":
+		io.WriteString(w, `<html><div id="asam_content">`+f.child+`</div></html>`)
+		return
+	}
 	body, ok := f.pages[r.URL.Path]
 	if !ok {
-		body = "<html>start</html>"
+		body = kinderPage(f.child)
 	}
 	ct := "text/html; charset=utf-8"
 	if strings.HasPrefix(body, "%PDF") {
@@ -65,6 +76,17 @@ func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	w.Header().Set("Content-Type", ct)
 	io.WriteString(w, body)
+}
+
+func kinderPage(selected string) string {
+	opt := func(id, name string) string {
+		sel := ""
+		if id == selected {
+			sel = " selected"
+		}
+		return `<option value="` + id + `"` + sel + `>` + name + `</option>`
+	}
+	return `<html><div class="pupil-selector"><select>` + opt("1906", "Anna Muster (7C)") + opt("1907", "Ben Muster (5A)") + `</select></div></html>`
 }
 
 func (f *fakePortal) expire() {

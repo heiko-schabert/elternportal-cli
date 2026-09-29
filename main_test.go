@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"slices"
+	"strings"
 	"testing"
 
 	"elternportal-mcp/portal"
@@ -36,7 +38,7 @@ func TestTools(t *testing.T) {
 		got = append(got, tl.Name)
 	}
 	slices.Sort(got)
-	want := []string{"check_login", "get_elternbrief", "get_schulaufgaben", "get_schwarzes_brett", "get_termine", "get_vertretungsplan", "list_elternbriefe"}
+	want := []string{"check_login", "get_elternbrief", "get_schulaufgaben", "get_schwarzes_brett", "get_termine", "get_vertretungsplan", "list_elternbriefe", "list_kinder"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -50,5 +52,24 @@ func TestToolError(t *testing.T) {
 	}
 	if !res.IsError {
 		t.Fatal("want IsError for unreachable portal")
+	}
+}
+
+func TestKindParamInSchema(t *testing.T) {
+	cs := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}))
+	res, err := cs.ListTools(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tl := range res.Tools {
+		if tl.Name != "get_elternbrief" {
+			continue
+		}
+		b, _ := json.Marshal(tl.InputSchema)
+		for _, p := range []string{`"kind"`, `"nummer"`} {
+			if !strings.Contains(string(b), p) {
+				t.Errorf("schema %s lacks %s", b, p)
+			}
+		}
 	}
 }

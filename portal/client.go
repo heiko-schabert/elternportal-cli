@@ -30,6 +30,10 @@ type Client struct {
 	http     *http.Client
 	mu       sync.Mutex
 	loggedIn bool
+	opMu     sync.Mutex // spans child selection plus the requests using it
+	kinder   []Kind
+	selected string // child active in the portal session
+	want     string // child the current operation needs
 }
 
 func New(cfg Config) *Client {
@@ -57,7 +61,7 @@ func (c *Client) login(ctx context.Context) error {
 	if !ok {
 		return errors.New("Login-Seite: CSRF-Token fehlt")
 	}
-	body, _, err = c.do(ctx, http.MethodPost, "/includes/project/auth/login.php", url.Values{
+	body, ct, err = c.do(ctx, http.MethodPost, "/includes/project/auth/login.php", url.Values{
 		"csrf": {csrf}, "username": {c.cfg.User}, "password": {c.cfg.Password}, "go_to": {""},
 	})
 	if err != nil {
@@ -66,8 +70,13 @@ func (c *Client) login(ctx context.Context) error {
 	if isLoginPage(body) {
 		return ErrLogin
 	}
+	doc, err = parseHTML(body, ct)
+	if err != nil {
+		return err
+	}
+	c.kinder, c.selected = parseKinder(doc.Selection)
 	c.loggedIn = true
-	return nil
+	return c.applyKind(ctx)
 }
 
 // isLoginPage detects the login form; the portal answers expired sessions
