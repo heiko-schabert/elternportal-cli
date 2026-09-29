@@ -57,3 +57,10 @@ func TestLoadConfigMissing(t *testing.T) {
 		t.Error("error leaks password")
 	}
 }
+
+func TestDefaultEnvFile(t *testing.T) {
+	t.Setenv("XDG_CONFIG_HOME", "/cfg")
+	if got := DefaultEnvFile(); got != "/cfg/elternportal/env" {
+		t.Fatalf("got %s", got)
+	}
+}

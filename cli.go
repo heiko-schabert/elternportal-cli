@@ -137,7 +137,7 @@ func run(ctx context.Context, srv *mcp.Server, c *portal.Client, ready func() er
 		Long: `Eltern-Portal from the terminal; JSON output.
 
 Credentials: ELTERNPORTAL_URL, ELTERNPORTAL_USER, ELTERNPORTAL_PASSWORD
-as environment variables or in ~/.mcp-server-config/elternportal_mcp/.env.
+as environment variables or in ~/.config/elternportal/env.
 Write commands require ELTERNPORTAL_ALLOW_WRITE=1.`,
 		Example:       "  elternportal-cli letter --number 49 | jq -r .content",
 		SilenceUsage:  true,

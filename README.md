@@ -14,7 +14,7 @@ PDF attachments need `pdftotext` (poppler) on `PATH`; `devenv shell` provides it
 
 ## Configuration
 
-Environment variables take precedence over `~/.mcp-server-config/elternportal_mcp/.env` (same file as the Python package `elternportal-mcp`).
+Environment variables take precedence over `~/.config/elternportal/env` (`$XDG_CONFIG_HOME/elternportal/env`), one `KEY=value` per line.
 
 | Key | Required | Meaning |
 |---|---|---|

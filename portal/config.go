@@ -16,11 +16,10 @@ type Config struct {
 	AllowWrite          bool
 }
 
-// DefaultEnvFile is shared with the Python elternportal-mcp so either server
-// works from the same credentials.
+// DefaultEnvFile follows XDG ($XDG_CONFIG_HOME, else ~/.config).
 func DefaultEnvFile() string {
-	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".mcp-server-config", "elternportal_mcp", ".env")
+	dir, _ := os.UserConfigDir()
+	return filepath.Join(dir, "elternportal", "env")
 }
 
 // LoadConfig prefers env vars over the file so an MCP client config can override it.
