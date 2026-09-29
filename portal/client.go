@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
+	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -197,4 +198,33 @@ func text(s *goquery.Selection) string {
 		}
 	}
 	return strings.Join(lines, "\n")
+}
+
+// doc returns a whole page; the messaging pages lack #asam_content.
+func (c *Client) doc(ctx context.Context, path string) (*goquery.Document, error) {
+	b, ct, err := c.fetch(ctx, path)
+	if err != nil {
+		return nil, err
+	}
+	return parseHTML(b, ct)
+}
+
+// download returns an attachment as text.
+func (c *Client) download(ctx context.Context, href string) (string, error) {
+	path, err := c.resolve(href)
+	if err != nil {
+		return "", err
+	}
+	raw, ct, err := c.fetch(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	if strings.Contains(ct, "html") {
+		return "", fmt.Errorf("%s: Download lieferte HTML statt Datei", path)
+	}
+	txt, err := pdfText(ctx, raw)
+	if errors.Is(err, exec.ErrNotFound) {
+		return "(pdftotext nicht installiert, PDF-Text nicht verfügbar)", nil
+	}
+	return txt, err
 }

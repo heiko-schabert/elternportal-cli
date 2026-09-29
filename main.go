@@ -22,6 +22,18 @@ type loginStatus struct {
 	Status string `json:"status"`
 }
 
+type seiteArgs struct {
+	kindArg
+	Seite int `json:"seite,omitempty" jsonschema:"Seite der Liste, Standard 1"`
+}
+
+type threadArgs struct {
+	kindArg
+	LehrerID         int  `json:"lehrer_id" jsonschema:"lehrer_id aus list_nachrichten"`
+	ThreadID         int  `json:"thread_id" jsonschema:"thread_id aus list_nachrichten"`
+	UngelesenOeffnen bool `json:"ungelesen_oeffnen,omitempty" jsonschema:"true öffnet auch ungelesene Threads (markiert sie im Portal als gelesen)"`
+}
+
 type kindArg struct {
 	Kind string `json:"kind,omitempty" jsonschema:"Vorname des Kindes; nur bei mehreren Kindern nötig"`
 }
@@ -71,6 +83,16 @@ func newServer(c *portal.Client) *mcp.Server {
 		})
 	tool(s, c, "list_kinder", "Kinder im Account (ID, Name, Klasse). Namen für den kind-Parameter anderer Tools.",
 		func(ctx context.Context, _ none) (portal.Kinder, error) { return c.Kinder(ctx) })
+	tool(s, c, "list_nachrichten", "Nachrichten-Threads mit Fachlehrkräften (neueste zuerst, paginiert): Lehrkraft, Betreff, Datum, ungelesen, Anhang.",
+		func(ctx context.Context, in seiteArgs) (portal.Nachrichten, error) {
+			return c.Nachrichten(ctx, in.Seite)
+		})
+	tool(s, c, "get_nachricht", "Kompletter Thread mit allen Beiträgen und Anhängen als Text. Ungelesene nur mit ungelesen_oeffnen=true (markiert gelesen) — vorher User fragen.",
+		func(ctx context.Context, in threadArgs) (portal.Thread, error) {
+			return c.Nachricht(ctx, in.LehrerID, in.ThreadID, in.UngelesenOeffnen)
+		})
+	tool(s, c, "list_lehrkraefte", "Lehrkräfte, denen man schreiben kann (ID, Name, Funktion).",
+		func(ctx context.Context, _ kindArg) (portal.Lehrkraefte, error) { return c.Lehrkraefte(ctx) })
 	return s
 }
 

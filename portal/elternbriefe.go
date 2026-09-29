@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"os/exec"
 	"regexp"
 	"strconv"
 	"strings"
@@ -126,22 +125,9 @@ func (c *Client) Elternbrief(ctx context.Context, nummer int, titel string) (Elt
 	if !b.HatDatei {
 		return out, nil
 	}
-	path, err := c.resolve(b.downloadURL)
+	pdf, err := c.download(ctx, b.downloadURL)
 	if err != nil {
-		return ElternbriefInhalt{}, err
-	}
-	raw, ct, err := c.fetch(ctx, path)
-	if err != nil {
-		return ElternbriefInhalt{}, err
-	}
-	if strings.Contains(ct, "html") {
-		return ElternbriefInhalt{}, fmt.Errorf("Elternbrief #%d: Download lieferte HTML statt Datei", b.Nummer)
-	}
-	pdf, err := pdfText(ctx, raw)
-	if errors.Is(err, exec.ErrNotFound) {
-		pdf = "(pdftotext nicht installiert, PDF-Text nicht verfügbar)"
-	} else if err != nil {
-		return ElternbriefInhalt{}, err
+		return ElternbriefInhalt{}, fmt.Errorf("Elternbrief #%d: %w", b.Nummer, err)
 	}
 	out.Inhalt = strings.TrimSpace(b.inline + "\n\n" + pdf)
 	return out, nil

@@ -27,11 +27,12 @@ type fakePortal struct {
 	logins int
 	pages  map[string]string
 	child  string
+	hits   map[string]int
 }
 
 func newFakePortal(t *testing.T, pages map[string]string) *fakePortal {
 	t.Helper()
-	f := &fakePortal{valid: map[string]bool{}, pages: pages}
+	f := &fakePortal{valid: map[string]bool{}, pages: pages, hits: map[string]int{}}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Close)
 	return f
@@ -57,6 +58,7 @@ func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
 		io.WriteString(w, loginPage)
 		return
 	}
+	f.hits[r.URL.Path]++
 	switch r.URL.Path {
 	case "/api/set_child.php":
 		f.child = r.URL.Query().Get("id")
