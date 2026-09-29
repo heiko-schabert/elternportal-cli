@@ -149,11 +149,19 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 }
 
 func main() {
+	log.SetFlags(0)
+	args := os.Args[1:]
 	cfg, err := portal.LoadConfig(os.Getenv, portal.DefaultEnvFile())
-	if err != nil {
+	// Help works without credentials so a fresh install can discover commands.
+	if err != nil && len(args) > 0 && !isHelp(args[0]) {
 		log.Fatal(err)
 	}
-	if err := newServer(portal.New(cfg), cfg.AllowWrite).Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-		log.Fatal(err)
+	srv := newServer(portal.New(cfg), cfg.AllowWrite)
+	if len(args) > 0 && args[0] == "mcp" {
+		if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+			log.Fatal(err)
+		}
+		return
 	}
+	os.Exit(run(context.Background(), srv, args, os.Stdout, os.Stderr))
 }
