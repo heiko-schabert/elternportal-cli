@@ -1,9 +1,10 @@
-// Command elternportal-mcp serves Eltern-Portal data over MCP stdio.
+// Command elternportal-cli reads and writes Eltern-Portal data from the
+// terminal and, with the mcp subcommand, serves the same tools over MCP.
 package main
 
 import (
 	"context"
-	"elternportal-mcp/portal"
+	"elternportal-cli/portal"
 	"log"
 	"os"
 

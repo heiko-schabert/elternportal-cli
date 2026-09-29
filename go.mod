@@ -1,4 +1,4 @@
-module elternportal-mcp
+module elternportal-cli
 
 go 1.26.7
 

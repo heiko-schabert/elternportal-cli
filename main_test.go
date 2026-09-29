@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"elternportal-mcp/portal"
+	"elternportal-cli/portal"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
