@@ -88,7 +88,7 @@ func nachrichtenPortal(t *testing.T) *fakePortal {
 
 func TestNachrichtUngelesenGuard(t *testing.T) {
 	f := nachrichtenPortal(t)
-	_, err := f.client("p").Nachricht(context.Background(), 62, 148884, false)
+	_, err := f.client("p").Nachricht(context.Background(), 148884, false)
 	if err == nil || !strings.Contains(err.Error(), "ungelesen") {
 		t.Fatalf("err = %v, want unread guard", err)
 	}
@@ -100,7 +100,7 @@ func TestNachrichtUngelesenGuard(t *testing.T) {
 func TestNachrichtOeffnen(t *testing.T) {
 	t.Setenv("PATH", "")
 	f := nachrichtenPortal(t)
-	th, err := f.client("p").Nachricht(context.Background(), 62, 148884, true)
+	th, err := f.client("p").Nachricht(context.Background(), 148884, true)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestNachrichtOeffnen(t *testing.T) {
 func TestNachrichtBildAnhang(t *testing.T) {
 	f := nachrichtenPortal(t)
 	f.pages["/aktuelles/get_file/"] = "\x89PNG\r\n\x1a\n bild"
-	th, err := f.client("p").Nachricht(context.Background(), 29, 146807, false)
+	th, err := f.client("p").Nachricht(context.Background(), 146807, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,11 +123,24 @@ func TestNachrichtBildAnhang(t *testing.T) {
 
 func TestNachrichtUnbekannt(t *testing.T) {
 	f := nachrichtenPortal(t)
-	_, err := f.client("p").Nachricht(context.Background(), 1, 1, false)
+	_, err := f.client("p").Nachricht(context.Background(), 1, false)
 	if err == nil || !strings.Contains(err.Error(), "nicht in der Liste") {
 		t.Fatalf("err = %v, want not-found guard", err)
 	}
-	if f.hits[fachlehrerPath+"/1/1"] != 0 {
-		t.Fatal("unknown thread was opened")
+	for p, n := range f.hits {
+		if strings.HasPrefix(p, fachlehrerPath+"/") && n > 0 {
+			t.Fatalf("opened %s", p)
+		}
+	}
+}
+
+func TestNachrichtLehrerAusListe(t *testing.T) {
+	t.Setenv("PATH", "")
+	f := nachrichtenPortal(t)
+	if _, err := f.client("p").Nachricht(context.Background(), 148884, true); err != nil {
+		t.Fatal(err)
+	}
+	if f.hits[fachlehrerPath+"/62/148884"] != 1 {
+		t.Fatalf("hits = %v, want thread opened under teacher 62", f.hits)
 	}
 }

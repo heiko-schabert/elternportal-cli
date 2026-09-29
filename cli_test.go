@@ -145,8 +145,8 @@ func TestCommandHelp(t *testing.T) {
 }
 
 func TestRequiredFlag(t *testing.T) {
-	code, _, errOut := runCLI(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), "nachricht", "--thread-id", "1")
-	if code != 1 || !strings.Contains(errOut, "lehrer-id") {
+	code, _, errOut := runCLI(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), "nachricht")
+	if code != 1 || !strings.Contains(errOut, "thread-id") {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
 }

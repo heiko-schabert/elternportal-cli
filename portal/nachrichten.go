@@ -110,17 +110,15 @@ func parseNachrichten(d *goquery.Document) (Nachrichten, error) {
 
 // Nachricht opens a thread. The portal marks threads read on open, so unread
 // ones need ungelesenOeffnen to avoid clearing the marker behind the user's back.
-func (c *Client) Nachricht(ctx context.Context, lehrerID, threadID int, ungelesenOeffnen bool) (Thread, error) {
-	if !ungelesenOeffnen {
-		unread, err := c.ungelesen(ctx, threadID)
-		if err != nil {
-			return Thread{}, err
-		}
-		if unread {
-			return Thread{}, fmt.Errorf("Thread %d ist ungelesen; Öffnen markiert ihn gelesen. Mit ungelesen_oeffnen=true bestätigen", threadID)
-		}
+func (c *Client) Nachricht(ctx context.Context, threadID int, ungelesenOeffnen bool) (Thread, error) {
+	m, err := c.findThread(ctx, threadID)
+	if err != nil {
+		return Thread{}, err
 	}
-	d, err := c.doc(ctx, fmt.Sprintf("%s/%d/%d", fachlehrerPath, lehrerID, threadID))
+	if m.Ungelesen && !ungelesenOeffnen {
+		return Thread{}, fmt.Errorf("Thread %d ist ungelesen; Öffnen markiert ihn gelesen. Mit ungelesen_oeffnen=true bestätigen", threadID)
+	}
+	d, err := c.doc(ctx, threadPath(m))
 	if err != nil {
 		return Thread{}, err
 	}
@@ -139,20 +137,26 @@ func (c *Client) Nachricht(ctx context.Context, lehrerID, threadID int, ungelese
 	return th, nil
 }
 
-func (c *Client) ungelesen(ctx context.Context, threadID int) (bool, error) {
+func threadPath(m Nachricht) string {
+	return fmt.Sprintf("%s/%d/%d", fachlehrerPath, m.LehrerID, m.ThreadID)
+}
+
+// findThread looks a thread up in the list; its URL needs the teacher ID,
+// which only the list reveals.
+func (c *Client) findThread(ctx context.Context, threadID int) (Nachricht, error) {
 	for seite, seiten := 1, 1; seite <= seiten; seite++ {
 		n, err := c.Nachrichten(ctx, seite)
 		if err != nil {
-			return false, err
+			return Nachricht{}, err
 		}
 		seiten = n.Seiten
 		for _, m := range n.Nachrichten {
 			if m.ThreadID == threadID {
-				return m.Ungelesen, nil
+				return m, nil
 			}
 		}
 	}
-	return false, fmt.Errorf("Thread %d nicht in der Liste; lehrer_id und thread_id aus list_nachrichten nehmen", threadID)
+	return Nachricht{}, fmt.Errorf("Thread %d nicht in der Liste; thread_id aus der Nachrichtenliste nehmen", threadID)
 }
 
 func parseThread(d *goquery.Document) (Thread, error) {

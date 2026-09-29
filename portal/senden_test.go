@@ -41,7 +41,7 @@ func sendePortal(t *testing.T) *fakePortal {
 
 func TestAntworten(t *testing.T) {
 	f := sendePortal(t)
-	th, err := f.client("p").Antworten(context.Background(), 29, 146807, "Danke!")
+	th, err := f.client("p").Antworten(context.Background(), 146807, "Danke!")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -56,7 +56,7 @@ func TestAntworten(t *testing.T) {
 
 func TestAntwortenLeer(t *testing.T) {
 	f := sendePortal(t)
-	if _, err := f.client("p").Antworten(context.Background(), 29, 146807, "  "); err == nil {
+	if _, err := f.client("p").Antworten(context.Background(), 146807, "  "); err == nil {
 		t.Fatal("want error for empty text")
 	}
 	if len(f.posts) != 0 {
@@ -110,7 +110,7 @@ func TestKlassenleitungUngueltig(t *testing.T) {
 
 func TestAntwortenMehrzeilig(t *testing.T) {
 	f := sendePortal(t)
-	if _, err := f.client("p").Antworten(context.Background(), 29, 146807, "Hallo,\n\nDanke!"); err != nil {
+	if _, err := f.client("p").Antworten(context.Background(), 146807, "Hallo,\n\nDanke!"); err != nil {
 		t.Fatal(err)
 	}
 }

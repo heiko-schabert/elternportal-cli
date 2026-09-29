@@ -27,12 +27,16 @@ func formCSRF(d *goquery.Document, path string) (string, error) {
 }
 
 // Antworten replies in a thread and returns the reloaded thread as proof.
-func (c *Client) Antworten(ctx context.Context, lehrerID, threadID int, text string) (Thread, error) {
+func (c *Client) Antworten(ctx context.Context, threadID int, text string) (Thread, error) {
 	text = strings.TrimSpace(text)
 	if text == "" {
 		return Thread{}, errors.New("text leer")
 	}
-	path := fmt.Sprintf("%s/%d/%d", fachlehrerPath, lehrerID, threadID)
+	m, err := c.findThread(ctx, threadID)
+	if err != nil {
+		return Thread{}, err
+	}
+	path := threadPath(m)
 	d, err := c.doc(ctx, path)
 	if err != nil {
 		return Thread{}, err
@@ -43,7 +47,7 @@ func (c *Client) Antworten(ctx context.Context, lehrerID, threadID int, text str
 	}
 	if err := c.postMultipart(ctx, fachlehrerInsPath, map[string]string{
 		"csrf": csrf, "nachricht_kom_fach": text,
-		"kob_id": strconv.Itoa(threadID), "teacher_id": strconv.Itoa(lehrerID),
+		"kob_id": strconv.Itoa(threadID), "teacher_id": strconv.Itoa(m.LehrerID),
 	}); err != nil {
 		return Thread{}, err
 	}

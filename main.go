@@ -29,7 +29,6 @@ type seiteArgs struct {
 
 type threadArgs struct {
 	kindArg
-	LehrerID         int  `json:"lehrer_id" jsonschema:"lehrer_id aus der Nachrichtenliste"`
 	ThreadID         int  `json:"thread_id" jsonschema:"thread_id aus der Nachrichtenliste"`
 	UngelesenOeffnen bool `json:"ungelesen_oeffnen,omitempty" jsonschema:"true öffnet auch ungelesene Threads (markiert sie im Portal als gelesen)"`
 }
@@ -41,7 +40,6 @@ type nummerArgs struct {
 
 type antwortArgs struct {
 	kindArg
-	LehrerID int    `json:"lehrer_id" jsonschema:"lehrer_id aus der Nachrichtenliste"`
 	ThreadID int    `json:"thread_id" jsonschema:"thread_id aus der Nachrichtenliste"`
 	Text     string `json:"text" jsonschema:"Nachrichtentext"`
 }
@@ -118,7 +116,7 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 		})
 	tool(s, c, "get_nachricht", "Kompletter Thread mit allen Beiträgen und Anhängen als Text. Ungelesene nur mit ungelesen_oeffnen=true (markiert gelesen) — vorher User fragen.",
 		func(ctx context.Context, in threadArgs) (portal.Thread, error) {
-			return c.Nachricht(ctx, in.LehrerID, in.ThreadID, in.UngelesenOeffnen)
+			return c.Nachricht(ctx, in.ThreadID, in.UngelesenOeffnen)
 		})
 	tool(s, c, "list_lehrkraefte", "Lehrkräfte, denen man schreiben kann (ID, Name, Funktion).",
 		func(ctx context.Context, _ kindArg) (portal.Lehrkraefte, error) { return c.Lehrkraefte(ctx) })
@@ -131,7 +129,7 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 		})
 	tool(s, c, "send_nachricht", "Antwortet in einem bestehenden Thread an eine Lehrkraft. Sendet sofort — Text vorher mit User abstimmen.",
 		func(ctx context.Context, in antwortArgs) (portal.Thread, error) {
-			return c.Antworten(ctx, in.LehrerID, in.ThreadID, in.Text)
+			return c.Antworten(ctx, in.ThreadID, in.Text)
 		})
 	tool(s, c, "neue_nachricht", "Startet eine neue Konversation mit einer Lehrkraft. Sendet sofort — Text vorher mit User abstimmen.",
 		func(ctx context.Context, in neuArgs) (portal.Nachricht, error) {
