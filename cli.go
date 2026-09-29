@@ -7,8 +7,10 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"net/url"
+	"os"
 	"path"
 	"slices"
 	"strings"
@@ -141,6 +143,20 @@ Write commands require ELTERNPORTAL_ALLOW_WRITE=1.`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
+	// Logs go to stderr so stdout stays clean JSON or MCP protocol.
+	level := os.Getenv("ELTERNPORTAL_LOG_LEVEL")
+	if level == "" {
+		level = "warn"
+	}
+	root.PersistentFlags().StringVar(&level, "log-level", level, "debug, info, warn or error (env ELTERNPORTAL_LOG_LEVEL)")
+	root.PersistentPreRunE = func(*cobra.Command, []string) error {
+		var l slog.Level
+		if err := l.UnmarshalText([]byte(level)); err != nil {
+			return fmt.Errorf("--log-level: %w", err)
+		}
+		slog.SetDefault(slog.New(slog.NewTextHandler(stderr, &slog.HandlerOptions{Level: l})))
+		return nil
+	}
 	for _, t := range tools.Tools {
 		cmd, err := toolCommand(cs, t, ready)
 		if err != nil {
@@ -163,7 +179,7 @@ private interface only, e.g. the Tailscale IP.`,
 			if addr == "" {
 				return srv.Run(cmd.Context(), &mcp.StdioTransport{})
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "MCP over HTTP on %s\n", addr)
+			slog.InfoContext(cmd.Context(), "serving MCP over HTTP", "addr", addr)
 			return http.ListenAndServe(addr, httpHandler(srv))
 		},
 	}
@@ -255,6 +271,7 @@ func downloadCommand(cs *mcp.ClientSession, ready func() error) *cobra.Command {
 				if err != nil {
 					return err
 				}
+				slog.InfoContext(cmd.Context(), "saved file", "path", p)
 				saved = append(saved, p)
 			}
 			return printJSON(cmd.OutOrStdout(), map[string][]string{"files": saved})

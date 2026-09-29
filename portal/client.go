@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
@@ -79,6 +80,7 @@ func (c *Client) login(ctx context.Context) error {
 	}
 	c.children, c.selected = parseChildren(doc.Selection)
 	c.loggedIn = true
+	slog.InfoContext(ctx, "logged in", "children", len(c.children))
 	return c.applyChild(ctx)
 }
 
@@ -105,15 +107,19 @@ func (c *Client) do(ctx context.Context, method, path string, form url.Values) (
 		req.Header.Set("Origin", c.cfg.URL)
 		req.Header.Set("Referer", c.cfg.URL+"/")
 	}
+	start := time.Now()
 	resp, err := c.http.Do(req)
 	if err != nil {
+		slog.DebugContext(ctx, "request failed", "method", method, "path", redact(path), "err", err)
 		return nil, "", err
 	}
 	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	slog.DebugContext(ctx, "request", "method", method, "path", redact(path), "status", resp.StatusCode,
+		"bytes", len(b), "duration", time.Since(start).Round(time.Millisecond))
 	if resp.StatusCode != http.StatusOK {
 		return nil, "", fmt.Errorf("%s %s: %s", method, path, resp.Status)
 	}
-	b, err := io.ReadAll(resp.Body)
 	return b, resp.Header.Get("Content-Type"), err
 }
 
@@ -130,6 +136,7 @@ func (c *Client) fetch(ctx context.Context, path string) ([]byte, string, error)
 	if err != nil || !isLoginPage(b) {
 		return b, ct, err
 	}
+	slog.WarnContext(ctx, "session expired, logging in again", "path", redact(path))
 	if err := c.login(ctx); err != nil {
 		return nil, "", err
 	}
@@ -234,6 +241,7 @@ func (c *Client) postMultipart(ctx context.Context, path string, fields map[stri
 	req.Header.Set("Referer", c.cfg.URL+"/")
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	slog.InfoContext(ctx, "submitting form", "path", path)
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// The portal may have stored the message before the connection failed.
@@ -252,4 +260,16 @@ func (c *Client) postMultipart(ctx context.Context, path string, fields map[stri
 		return fmt.Errorf("POST %s: session expired, not sent; try again", path)
 	}
 	return nil
+}
+
+// redact masks csrf tokens, which download links carry in their query.
+func redact(path string) string {
+	u, err := url.Parse(path)
+	if err != nil || !u.Query().Has("csrf") {
+		return path
+	}
+	q := u.Query()
+	q.Set("csrf", "REDACTED")
+	u.RawQuery = q.Encode()
+	return u.String()
 }

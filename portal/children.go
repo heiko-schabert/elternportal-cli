@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"regexp"
@@ -115,6 +116,7 @@ func (c *Client) applyChild(ctx context.Context) error {
 	if c.want == "" || c.want == c.selected {
 		return nil
 	}
+	slog.DebugContext(ctx, "switching child", "id", c.want)
 	body, _, err := c.do(ctx, http.MethodPost, "/api/set_child.php?id="+url.QueryEscape(c.want), nil)
 	if err != nil {
 		return err

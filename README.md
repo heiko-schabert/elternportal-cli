@@ -22,6 +22,9 @@ Environment variables take precedence over `~/.mcp-server-config/elternportal_mc
 | `ELTERNPORTAL_USER` | yes | login email |
 | `ELTERNPORTAL_PASSWORD` | yes | password |
 | `ELTERNPORTAL_ALLOW_WRITE` | no | `1` enables write commands |
+| `ELTERNPORTAL_LOG_LEVEL` | no | `debug`, `info`, `warn` (default) or `error`; same as `--log-level` |
+
+Logs go to stderr, so stdout stays clean JSON (or MCP protocol). `debug` logs every portal request with path, status, size and duration; `info` adds logins, tool calls and saved files. Passwords, cookies and csrf tokens are never logged.
 
 ## Usage
 
@@ -87,6 +90,7 @@ Wants=network-online.target
 [Service]
 ExecStart=/usr/local/bin/elternportal-cli mcp --http 100.64.0.1:8080
 EnvironmentFile=/etc/elternportal-cli.env
+Environment=ELTERNPORTAL_LOG_LEVEL=info
 DynamicUser=yes
 Restart=on-failure
 

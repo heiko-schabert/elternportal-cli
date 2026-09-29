@@ -262,3 +262,26 @@ func TestSyncCommand(t *testing.T) {
 		t.Fatalf("stat %v, stdout %q", err, out)
 	}
 }
+
+func TestLogLevel(t *testing.T) {
+	c := fakePortal(t)
+	code, _, errOut := runCLI(t, c, "bulletin")
+	if code != 0 || errOut != "" {
+		t.Fatalf("default level: exit %d, stderr %q", code, errOut)
+	}
+	code, _, errOut = runCLI(t, c, "--log-level", "debug", "bulletin")
+	if code != 0 || !strings.Contains(errOut, "level=DEBUG") || !strings.Contains(errOut, "path=/aktuelles/schwarzes_brett") {
+		t.Fatalf("debug: exit %d, stderr %q", code, errOut)
+	}
+	if code, _, _ := runCLI(t, c, "--log-level", "laut", "bulletin"); code != 1 {
+		t.Fatalf("invalid level: exit %d", code)
+	}
+}
+
+func TestLogLevelFromEnv(t *testing.T) {
+	t.Setenv("ELTERNPORTAL_LOG_LEVEL", "debug")
+	code, _, errOut := runCLI(t, fakePortal(t), "bulletin")
+	if code != 0 || !strings.Contains(errOut, "level=DEBUG") {
+		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+}

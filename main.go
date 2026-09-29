@@ -6,8 +6,10 @@ import (
 	"context"
 	"elternportal-cli/portal"
 	"encoding/json"
+	"log/slog"
 	"net/url"
 	"os"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -93,7 +95,9 @@ func toolFiles[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, 
 				}
 				defer release()
 			}
+			start := time.Now()
 			out, files, err := fn(ctx, in)
+			slog.InfoContext(ctx, "tool call", "tool", name, "files", len(files), "duration", time.Since(start).Round(time.Millisecond), "err", err)
 			if err != nil || len(files) == 0 {
 				return nil, out, err
 			}

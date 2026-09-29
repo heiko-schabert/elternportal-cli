@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/exec"
@@ -109,6 +110,7 @@ func (c *Client) Sync(ctx context.Context, dir string) (SyncResult, error) {
 			}
 			seen[m.ThreadID] = true
 			if m.Unread {
+				slog.WarnContext(ctx, "skipping unread thread", "thread", m.ThreadID)
 				res.SkippedUnread = append(res.SkippedUnread, m.ThreadID)
 				continue
 			}
@@ -131,7 +133,9 @@ func (c *Client) Sync(ctx context.Context, dir string) (SyncResult, error) {
 		if err != nil {
 			return res, err
 		}
+		slog.InfoContext(ctx, "saved file", "path", p)
 		res.Saved = append(res.Saved, p)
 	}
+	slog.InfoContext(ctx, "sync done", "saved", len(res.Saved), "skipped_unread", len(res.SkippedUnread))
 	return res, nil
 }
