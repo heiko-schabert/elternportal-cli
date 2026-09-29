@@ -37,16 +37,26 @@ elternportal-cli completion fish | source
 
 | Command | Portal page |
 |---|---|
-| `letters`, `letter`, `confirm-letter` | Elternbriefe |
+| `letters`, `letter`, `confirm-letter`, `download --letter` | Elternbriefe |
 | `exams` | Schulaufgaben |
 | `events` | Allgemeine Termine |
 | `bulletin` | Schwarzes Brett |
 | `substitutions` | Vertretungsplan |
-| `messages`, `message`, `reply`, `new-message`, `teachers` | Kommunikation Eltern/Fachlehrer |
+| `messages`, `message`, `reply`, `new-message`, `teachers`, `download --thread-id` | Kommunikation Eltern/Fachlehrer |
 | `contact-class-teacher` | Kommunikation Eltern/Klassenleitung |
 | `children` | child selector |
 
 Errors go to stderr with exit code 1.
+
+### Original files
+
+```bash
+elternportal-cli download --letter 49 --dir ~/Schule          # one letter
+elternportal-cli download --thread-id 146807 --dir ~/Schule   # all attachments of a thread
+elternportal-cli sync --dir ~/Schule                          # everything missing, e.g. from cron
+```
+
+Files are named `letter-<number>-<name>` and `thread-<id>-<name>` and written with mode `0600`. `sync` only downloads files not yet in the directory and skips unread threads (reported as `skipped_unread`), since opening a thread marks it read. Via MCP, `get_letter` and `get_message` take `include_files=true` and return the originals as embedded resources.
 
 With several children, child-specific commands take `--child <first name>`. `message` opens unread threads only with `--open-unread`, because the portal marks them read on open. Modules a school has disabled report "module disabled at this school".
 

@@ -5,6 +5,8 @@ package main
 import (
 	"context"
 	"elternportal-cli/portal"
+	"encoding/json"
+	"net/url"
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -14,8 +16,9 @@ type none struct{}
 
 type letterArgs struct {
 	childArg
-	Number int    `json:"number,omitempty" jsonschema:"letter number, e.g. 134"`
-	Title  string `json:"title,omitempty" jsonschema:"part of the title, case-insensitive"`
+	Number       int    `json:"number,omitempty" jsonschema:"letter number, e.g. 134"`
+	Title        string `json:"title,omitempty" jsonschema:"part of the title, case-insensitive"`
+	IncludeFiles bool   `json:"include_files,omitempty" jsonschema:"also return the original file as an embedded resource (base64, can be large)"`
 }
 
 type loginStatus struct {
@@ -29,8 +32,9 @@ type pageArgs struct {
 
 type threadArgs struct {
 	childArg
-	ThreadID   int  `json:"thread_id" jsonschema:"thread_id from the message list"`
-	OpenUnread bool `json:"open_unread,omitempty" jsonschema:"also open unread threads (the portal marks them read)"`
+	ThreadID     int  `json:"thread_id" jsonschema:"thread_id from the message list"`
+	OpenUnread   bool `json:"open_unread,omitempty" jsonschema:"also open unread threads (the portal marks them read)"`
+	IncludeFiles bool `json:"include_files,omitempty" jsonschema:"also return the original files as embedded resources (base64, can be large)"`
 }
 
 type numberArgs struct {
@@ -67,21 +71,44 @@ type childArg struct {
 
 func (k childArg) childName() string { return k.Child }
 
-// tool hides the SDK's result plumbing and, for inputs embedding childArg,
-// selects the child for the duration of the call.
+// tool registers a tool whose result is only its output value.
 func tool[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, fn func(context.Context, In) (Out, error)) {
+	toolFiles(s, c, name, desc, func(ctx context.Context, in In) (Out, []portal.File, error) {
+		out, err := fn(ctx, in)
+		return out, nil, err
+	})
+}
+
+// toolFiles hides the SDK's result plumbing, embeds returned files as
+// resources and, for inputs embedding childArg, selects the child for the
+// duration of the call.
+func toolFiles[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, fn func(context.Context, In) (Out, []portal.File, error)) {
 	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
+			var zero Out
 			if k, ok := any(in).(interface{ childName() string }); ok {
 				release, err := c.UseChild(ctx, k.childName())
 				if err != nil {
-					var zero Out
 					return nil, zero, err
 				}
 				defer release()
 			}
-			out, err := fn(ctx, in)
-			return nil, out, err
+			out, files, err := fn(ctx, in)
+			if err != nil || len(files) == 0 {
+				return nil, out, err
+			}
+			// Once Content is set the SDK no longer adds the JSON text itself.
+			b, err := json.Marshal(out)
+			if err != nil {
+				return nil, zero, err
+			}
+			res := &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: string(b)}}}
+			for _, f := range files {
+				res.Content = append(res.Content, &mcp.EmbeddedResource{Resource: &mcp.ResourceContents{
+					URI: "elternportal://file/" + url.PathEscape(f.Name), MIMEType: f.ContentType, Blob: f.Data,
+				}})
+			}
+			return res, out, nil
 		})
 }
 
@@ -104,10 +131,9 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 		func(ctx context.Context, _ childArg) (portal.SubstitutionPlan, error) { return c.SubstitutionPlan(ctx) })
 	tool(s, c, "list_letters", "Parent letters (Elternbriefe): number, title, date, classes, confirmation status, whether a file is attached.",
 		func(ctx context.Context, _ childArg) (portal.Letters, error) { return c.Letters(ctx) })
-	tool(s, c, "get_letter", "Content of a parent letter as text. Pass number (exact) or title (substring, newest match).",
-		func(ctx context.Context, in letterArgs) (portal.LetterContent, error) {
-			out, _, err := c.Letter(ctx, in.Number, in.Title, false)
-			return out, err
+	toolFiles(s, c, "get_letter", "Content of a parent letter as text. Pass number (exact) or title (substring, newest match).",
+		func(ctx context.Context, in letterArgs) (portal.LetterContent, []portal.File, error) {
+			return c.Letter(ctx, in.Number, in.Title, in.IncludeFiles)
 		})
 	tool(s, c, "list_children", "Children on the account (ID, name, class). Names for the child parameter of other tools.",
 		func(ctx context.Context, _ none) (portal.Children, error) { return c.Children(ctx) })
@@ -115,10 +141,9 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 		func(ctx context.Context, in pageArgs) (portal.Messages, error) {
 			return c.Messages(ctx, in.Page)
 		})
-	tool(s, c, "get_message", "Full thread with all posts and attachments as text. Unread threads only with open_unread=true (marks them read); ask the user first.",
-		func(ctx context.Context, in threadArgs) (portal.Thread, error) {
-			out, _, err := c.Message(ctx, in.ThreadID, in.OpenUnread, false)
-			return out, err
+	toolFiles(s, c, "get_message", "Full thread with all posts and attachments as text. Unread threads only with open_unread=true (marks them read); ask the user first.",
+		func(ctx context.Context, in threadArgs) (portal.Thread, []portal.File, error) {
+			return c.Message(ctx, in.ThreadID, in.OpenUnread, in.IncludeFiles)
 		})
 	tool(s, c, "list_teachers", "Teachers you can write to (ID, name, role).",
 		func(ctx context.Context, _ childArg) (portal.Teachers, error) { return c.Teachers(ctx) })
@@ -150,5 +175,6 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 func main() {
 	cfg, err := portal.LoadConfig(os.Getenv, portal.DefaultEnvFile())
 	ready := func() error { return err }
-	os.Exit(run(context.Background(), newServer(portal.New(cfg), cfg.AllowWrite), ready, os.Args[1:], os.Stdout, os.Stderr))
+	c := portal.New(cfg)
+	os.Exit(run(context.Background(), newServer(c, cfg.AllowWrite), c, ready, os.Args[1:], os.Stdout, os.Stderr))
 }
