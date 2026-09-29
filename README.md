@@ -24,16 +24,18 @@ Env-Variablen haben Vorrang vor `~/.mcp-server-config/elternportal_mcp/.env` (gl
 ## Benutzung
 
 ```bash
-elternportal-cli                                  # Befehle und Parameter
+elternportal-cli                                  # Befehlsübersicht
+elternportal-cli nachricht -h                     # Flags eines Befehls
 elternportal-cli elternbriefe | jq '.briefe[:5]'
-elternportal-cli elternbrief nummer=49 | jq -r .inhalt
+elternportal-cli elternbrief --nummer 49 | jq -r .inhalt
 elternportal-cli nachrichten | jq '.nachrichten[] | select(.ungelesen)'
-ELTERNPORTAL_ALLOW_WRITE=1 elternportal-cli send-nachricht lehrer-id=29 thread-id=146807 text='Danke!'
+ELTERNPORTAL_ALLOW_WRITE=1 elternportal-cli send-nachricht --lehrer-id 29 --thread-id 146807 --text 'Danke!'
+elternportal-cli completion fish | source
 ```
 
-Parameter als `key=value`. Fehler gehen nach stderr, Exit-Code 1.
+Fehler gehen nach stderr, Exit-Code 1.
 
-Bei mehreren Kindern nehmen kindbezogene Befehle `kind=<Vorname>`. `nachricht` öffnet ungelesene Threads nur mit `ungelesen-oeffnen=true`, weil das Portal sie beim Öffnen als gelesen markiert. Module, die eine Schule deaktiviert hat, melden „Modul an dieser Schule nicht aktiv".
+Bei mehreren Kindern nehmen kindbezogene Befehle `--kind <Vorname>`. `nachricht` öffnet ungelesene Threads nur mit `--ungelesen-oeffnen`, weil das Portal sie beim Öffnen als gelesen markiert. Module, die eine Schule deaktiviert hat, melden „Modul an dieser Schule nicht aktiv".
 
 ## MCP
 

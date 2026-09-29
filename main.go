@@ -5,7 +5,6 @@ package main
 import (
 	"context"
 	"elternportal-cli/portal"
-	"log"
 	"os"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,8 +29,8 @@ type seiteArgs struct {
 
 type threadArgs struct {
 	kindArg
-	LehrerID         int  `json:"lehrer_id" jsonschema:"lehrer_id aus list_nachrichten"`
-	ThreadID         int  `json:"thread_id" jsonschema:"thread_id aus list_nachrichten"`
+	LehrerID         int  `json:"lehrer_id" jsonschema:"lehrer_id aus der Nachrichtenliste"`
+	ThreadID         int  `json:"thread_id" jsonschema:"thread_id aus der Nachrichtenliste"`
 	UngelesenOeffnen bool `json:"ungelesen_oeffnen,omitempty" jsonschema:"true öffnet auch ungelesene Threads (markiert sie im Portal als gelesen)"`
 }
 
@@ -42,14 +41,14 @@ type nummerArgs struct {
 
 type antwortArgs struct {
 	kindArg
-	LehrerID int    `json:"lehrer_id" jsonschema:"lehrer_id aus list_nachrichten"`
-	ThreadID int    `json:"thread_id" jsonschema:"thread_id aus list_nachrichten"`
+	LehrerID int    `json:"lehrer_id" jsonschema:"lehrer_id aus der Nachrichtenliste"`
+	ThreadID int    `json:"thread_id" jsonschema:"thread_id aus der Nachrichtenliste"`
 	Text     string `json:"text" jsonschema:"Nachrichtentext"`
 }
 
 type neuArgs struct {
 	kindArg
-	LehrerID int    `json:"lehrer_id" jsonschema:"id aus list_lehrkraefte"`
+	LehrerID int    `json:"lehrer_id" jsonschema:"id aus der Lehrkräfteliste"`
 	Betreff  string `json:"betreff" jsonschema:"Betreff, max. 128 Zeichen"`
 	Text     string `json:"text" jsonschema:"Nachrichtentext"`
 }
@@ -149,19 +148,7 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 }
 
 func main() {
-	log.SetFlags(0)
-	args := os.Args[1:]
 	cfg, err := portal.LoadConfig(os.Getenv, portal.DefaultEnvFile())
-	// Help works without credentials so a fresh install can discover commands.
-	if err != nil && len(args) > 0 && !isHelp(args[0]) {
-		log.Fatal(err)
-	}
-	srv := newServer(portal.New(cfg), cfg.AllowWrite)
-	if len(args) > 0 && args[0] == "mcp" {
-		if err := srv.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
-			log.Fatal(err)
-		}
-		return
-	}
-	os.Exit(run(context.Background(), srv, args, os.Stdout, os.Stderr))
+	ready := func() error { return err }
+	os.Exit(run(context.Background(), newServer(portal.New(cfg), cfg.AllowWrite), ready, os.Args[1:], os.Stdout, os.Stderr))
 }

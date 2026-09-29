@@ -3,19 +3,16 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
-	"strconv"
 	"strings"
-	"text/tabwriter"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 )
-
-func isHelp(arg string) bool {
-	return arg == "help" || arg == "-h" || arg == "--help"
-}
 
 // commandName derives the terminal command from the tool name, so both
 // modes share one registry.
@@ -24,71 +21,107 @@ func commandName(tool string) string {
 	return strings.ReplaceAll(tool, "_", "-")
 }
 
-type schema struct {
-	Properties map[string]struct {
-		Type string `json:"type"`
-	} `json:"properties"`
+func flagName(prop string) string { return strings.ReplaceAll(prop, "_", "-") }
+
+type property struct {
+	Type        string `json:"type"`
+	Description string `json:"description"`
 }
 
-// params returns a tool's parameter names in CLI spelling.
-func params(inputSchema any) (schema, []string, error) {
+type schema struct {
+	Properties map[string]property `json:"properties"`
+	Required   []string            `json:"required"`
+}
+
+func parseSchema(inputSchema any) (schema, error) {
 	var s schema
 	b, err := json.Marshal(inputSchema)
 	if err != nil {
-		return s, nil, err
+		return s, err
 	}
-	if err := json.Unmarshal(b, &s); err != nil {
-		return s, nil, err
-	}
-	var names []string
-	for k := range s.Properties {
-		names = append(names, strings.ReplaceAll(k, "_", "-"))
-	}
-	slices.Sort(names)
-	return s, names, nil
+	return s, json.Unmarshal(b, &s)
 }
 
-// parseArgs turns key=value pairs into tool arguments, typed by the schema so
-// text=49 stays a string while nummer=49 becomes a number.
-func parseArgs(args []string, inputSchema any) (map[string]any, error) {
-	s, names, err := params(inputSchema)
-	if err != nil {
-		return nil, err
-	}
-	out := map[string]any{}
-	for _, a := range args {
-		k, v, ok := strings.Cut(a, "=")
-		if !ok {
-			return nil, fmt.Errorf("%q: key=value erwartet", a)
+func addFlags(cmd *cobra.Command, s schema) {
+	for name, p := range s.Properties {
+		f := flagName(name)
+		switch p.Type {
+		case "integer":
+			cmd.Flags().Int(f, 0, p.Description)
+		case "boolean":
+			cmd.Flags().Bool(f, false, p.Description)
+		default:
+			cmd.Flags().String(f, "", p.Description)
 		}
-		key := strings.ReplaceAll(k, "-", "_")
-		p, ok := s.Properties[key]
-		if !ok {
-			return nil, fmt.Errorf("unbekannter Parameter %q; erlaubt: %s", k, strings.Join(names, ", "))
+		if slices.Contains(s.Required, name) {
+			cmd.MarkFlagRequired(f)
+		}
+	}
+}
+
+// toolArgs sends only flags the user set, so tools keep their own defaults.
+func toolArgs(fs *pflag.FlagSet, s schema) map[string]any {
+	in := map[string]any{}
+	for name, p := range s.Properties {
+		f := flagName(name)
+		if !fs.Changed(f) {
+			continue
 		}
 		switch p.Type {
 		case "integer":
-			n, err := strconv.Atoi(v)
-			if err != nil {
-				return nil, fmt.Errorf("%s: Zahl erwartet, nicht %q", k, v)
-			}
-			out[key] = n
+			in[name], _ = fs.GetInt(f)
 		case "boolean":
-			b, err := strconv.ParseBool(v)
-			if err != nil {
-				return nil, fmt.Errorf("%s: true/false erwartet, nicht %q", k, v)
-			}
-			out[key] = b
+			in[name], _ = fs.GetBool(f)
 		default:
-			out[key] = v
+			in[name], _ = fs.GetString(f)
 		}
 	}
-	return out, nil
+	return in
 }
 
-// run executes one command against an in-process MCP session and prints the
-// tool's JSON result.
-func run(ctx context.Context, srv *mcp.Server, args []string, stdout, stderr io.Writer) int {
+func toolCommand(cs *mcp.ClientSession, t *mcp.Tool, ready func() error) (*cobra.Command, error) {
+	s, err := parseSchema(t.InputSchema)
+	if err != nil {
+		return nil, err
+	}
+	short, _, _ := strings.Cut(t.Description, ". ")
+	cmd := &cobra.Command{
+		Use:   commandName(t.Name),
+		Short: strings.TrimSuffix(short, "."),
+		Long:  t.Description,
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := ready(); err != nil {
+				return err
+			}
+			res, err := cs.CallTool(cmd.Context(), &mcp.CallToolParams{Name: t.Name, Arguments: toolArgs(cmd.Flags(), s)})
+			if err != nil {
+				return err
+			}
+			if res.IsError {
+				var msgs []string
+				for _, c := range res.Content {
+					if tc, ok := c.(*mcp.TextContent); ok {
+						msgs = append(msgs, tc.Text)
+					}
+				}
+				return errors.New(strings.Join(msgs, "\n"))
+			}
+			b, err := json.MarshalIndent(res.StructuredContent, "", "  ")
+			if err != nil {
+				return err
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), string(b))
+			return nil
+		},
+	}
+	addFlags(cmd, s)
+	return cmd, nil
+}
+
+// run builds the command tree from the tools of an in-process MCP session and
+// executes args. ready reports missing credentials only when a command needs them.
+func run(ctx context.Context, srv *mcp.Server, ready func() error, args []string, stdout, stderr io.Writer) int {
 	fail := func(err error) int {
 		fmt.Fprintln(stderr, err)
 		return 1
@@ -106,51 +139,41 @@ func run(ctx context.Context, srv *mcp.Server, args []string, stdout, stderr io.
 	if err != nil {
 		return fail(err)
 	}
-	if len(args) == 0 || isHelp(args[0]) {
-		usage(stdout, tools.Tools)
-		return 0
-	}
-	i := slices.IndexFunc(tools.Tools, func(t *mcp.Tool) bool { return commandName(t.Name) == args[0] })
-	if i < 0 {
-		return fail(fmt.Errorf("unbekannter Befehl %q; ohne Argumente für Hilfe", args[0]))
-	}
-	tool := tools.Tools[i]
-	in, err := parseArgs(args[1:], tool.InputSchema)
-	if err != nil {
-		return fail(err)
-	}
-	res, err := cs.CallTool(ctx, &mcp.CallToolParams{Name: tool.Name, Arguments: in})
-	if err != nil {
-		return fail(err)
-	}
-	if res.IsError {
-		for _, c := range res.Content {
-			if t, ok := c.(*mcp.TextContent); ok {
-				fmt.Fprintln(stderr, t.Text)
-			}
-		}
-		return 1
-	}
-	b, err := json.MarshalIndent(res.StructuredContent, "", "  ")
-	if err != nil {
-		return fail(err)
-	}
-	fmt.Fprintln(stdout, string(b))
-	return 0
-}
+	root := &cobra.Command{
+		Use:   "elternportal-cli",
+		Short: "Eltern-Portal im Terminal; Ausgabe als JSON",
+		Long: `Eltern-Portal im Terminal; Ausgabe als JSON.
 
-func usage(w io.Writer, tools []*mcp.Tool) {
-	fmt.Fprintln(w, "Aufruf: elternportal-cli <befehl> [key=value …]\n\nBefehle:")
-	tw := tabwriter.NewWriter(w, 0, 0, 2, ' ', 0)
-	tools = slices.Clone(tools)
-	slices.SortFunc(tools, func(a, b *mcp.Tool) int { return strings.Compare(commandName(a.Name), commandName(b.Name)) })
-	for _, t := range tools {
-		_, names, _ := params(t.InputSchema)
-		desc, _, _ := strings.Cut(t.Description, ". ")
-		fmt.Fprintf(tw, "  %s\t%s\t%s\n", commandName(t.Name), strings.Join(names, " "), desc)
+Zugangsdaten: ELTERNPORTAL_URL, ELTERNPORTAL_USER, ELTERNPORTAL_PASSWORD
+als Env-Variablen oder in ~/.mcp-server-config/elternportal_mcp/.env.
+Schreibbefehle nur mit ELTERNPORTAL_ALLOW_WRITE=1.`,
+		Example:       "  elternportal-cli elternbrief --nummer 49 | jq -r .inhalt",
+		SilenceUsage:  true,
+		SilenceErrors: true,
 	}
-	fmt.Fprintf(tw, "  mcp\t\tMCP-Server über stdio für KI-Assistenten\n")
-	tw.Flush()
-	fmt.Fprintln(w, "\nBeispiel: elternportal-cli elternbrief nummer=49 | jq -r .inhalt")
-	fmt.Fprintln(w, "Schreibbefehle nur mit ELTERNPORTAL_ALLOW_WRITE=1.")
+	for _, t := range tools.Tools {
+		cmd, err := toolCommand(cs, t, ready)
+		if err != nil {
+			return fail(err)
+		}
+		root.AddCommand(cmd)
+	}
+	root.AddCommand(&cobra.Command{
+		Use:   "mcp",
+		Short: "MCP-Server über stdio für KI-Assistenten",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, _ []string) error {
+			if err := ready(); err != nil {
+				return err
+			}
+			return srv.Run(cmd.Context(), &mcp.StdioTransport{})
+		},
+	})
+	root.SetArgs(args)
+	root.SetOut(stdout)
+	root.SetErr(stderr)
+	if err := root.ExecuteContext(ctx); err != nil {
+		return fail(err)
+	}
+	return 0
 }

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -11,6 +12,8 @@ import (
 	"testing"
 
 	"elternportal-cli/portal"
+
+	"github.com/spf13/cobra"
 )
 
 func TestCommandNamesUnique(t *testing.T) {
@@ -34,31 +37,38 @@ func TestCommandNamesUnique(t *testing.T) {
 	}
 }
 
-func TestParseArgs(t *testing.T) {
-	schema := map[string]any{"properties": map[string]any{
-		"nummer":            map[string]any{"type": "integer"},
-		"text":              map[string]any{"type": "string"},
-		"ungelesen_oeffnen": map[string]any{"type": "boolean"},
-	}}
-	got, err := parseArgs([]string{"nummer=49", "text=49", "ungelesen-oeffnen=true"}, schema)
-	if err != nil {
+func TestToolArgs(t *testing.T) {
+	s := schema{
+		Properties: map[string]property{
+			"nummer":            {Type: "integer", Description: "Nummer"},
+			"text":              {Type: "string"},
+			"ungelesen_oeffnen": {Type: "boolean"},
+			"kind":              {Type: "string"},
+		},
+		Required: []string{"nummer"},
+	}
+	cmd := &cobra.Command{Use: "x"}
+	addFlags(cmd, s)
+	if err := cmd.Flags().Parse([]string{"--nummer", "49", "--text", "49", "--ungelesen-oeffnen"}); err != nil {
 		t.Fatal(err)
 	}
-	b, _ := json.Marshal(got)
+	b, _ := json.Marshal(toolArgs(cmd.Flags(), s))
+	// Unset flags stay out so the tool applies its own defaults.
 	if string(b) != `{"nummer":49,"text":"49","ungelesen_oeffnen":true}` {
 		t.Fatalf("got %s", b)
 	}
-	for _, bad := range [][]string{{"nummer"}, {"nummer=x"}, {"unbekannt=1"}} {
-		if _, err := parseArgs(bad, schema); err == nil {
-			t.Errorf("%v: want error", bad)
-		}
+	if ann := cmd.Flags().Lookup("nummer").Annotations[cobra.BashCompOneRequiredFlag]; len(ann) == 0 {
+		t.Error("nummer not marked required")
+	}
+	if u := cmd.Flags().Lookup("nummer").Usage; u != "Nummer" {
+		t.Errorf("usage = %q", u)
 	}
 }
 
 func runCLI(t *testing.T, c *portal.Client, args ...string) (code int, stdout, stderr string) {
 	t.Helper()
 	var out, errOut bytes.Buffer
-	code = run(context.Background(), newServer(c, false), args, &out, &errOut)
+	code = run(context.Background(), newServer(c, false), func() error { return nil }, args, &out, &errOut)
 	return code, out.String(), errOut.String()
 }
 
@@ -119,5 +129,43 @@ func TestRunCall(t *testing.T) {
 	}
 	if len(got.Aushaenge) != 1 || got.Aushaenge[0].Titel != "Mensa" {
 		t.Fatalf("got %+v", got)
+	}
+}
+
+func TestCommandHelp(t *testing.T) {
+	code, out, _ := runCLI(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), "elternbrief", "-h")
+	if code != 0 {
+		t.Fatalf("exit %d", code)
+	}
+	for _, want := range []string{"--nummer", "Nummer des Elternbriefs", "--kind"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("help lacks %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestRequiredFlag(t *testing.T) {
+	code, _, errOut := runCLI(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), "nachricht", "--thread-id", "1")
+	if code != 1 || !strings.Contains(errOut, "lehrer-id") {
+		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+}
+
+func TestBadFlagValue(t *testing.T) {
+	code, _, errOut := runCLI(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), "elternbrief", "--nummer", "x")
+	if code != 1 || !strings.Contains(errOut, "nummer") {
+		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+}
+
+func TestConfigErrorOnlyOnCall(t *testing.T) {
+	ready := func() error { return errors.New("Config fehlt") }
+	var out, errOut bytes.Buffer
+	c := portal.New(portal.Config{})
+	if code := run(context.Background(), newServer(c, false), ready, []string{"elternbriefe", "-h"}, &out, &errOut); code != 0 {
+		t.Fatalf("help: exit %d, stderr %q", code, errOut.String())
+	}
+	if code := run(context.Background(), newServer(c, false), ready, []string{"elternbriefe"}, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "Config fehlt") {
+		t.Fatalf("call: exit %d, stderr %q", code, errOut.String())
 	}
 }
