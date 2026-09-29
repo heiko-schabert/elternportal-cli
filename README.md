@@ -8,7 +8,7 @@ MCP-Server für das [Eltern-Portal](https://www.eltern-portal.org) (art soft and
 go install .
 ```
 
-Für PDF-Anhänge wird `pdftotext` (poppler) im `PATH` benötigt. Fehlt es, liefern die Tools die Metadaten und einen Hinweis statt des PDF-Texts.
+Für PDF-Anhänge wird `pdftotext` (poppler) im `PATH` benötigt; `devenv shell` stellt es bereit. Fehlt es, liefern die Tools die Metadaten und einen Hinweis statt des PDF-Texts.
 
 ## Konfiguration
 
