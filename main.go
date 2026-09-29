@@ -34,6 +34,11 @@ type threadArgs struct {
 	UngelesenOeffnen bool `json:"ungelesen_oeffnen,omitempty" jsonschema:"true öffnet auch ungelesene Threads (markiert sie im Portal als gelesen)"`
 }
 
+type nummerArgs struct {
+	kindArg
+	Nummer int `json:"nummer" jsonschema:"Nummer des Elternbriefs"`
+}
+
 type kindArg struct {
 	Kind string `json:"kind,omitempty" jsonschema:"Vorname des Kindes; nur bei mehreren Kindern nötig"`
 }
@@ -58,7 +63,7 @@ func tool[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, fn fu
 		})
 }
 
-func newServer(c *portal.Client) *mcp.Server {
+func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "elternportal", Version: "v0.1.0"}, nil)
 	tool(s, c, "check_login", "Prüft, ob Login ins Eltern-Portal funktioniert.",
 		func(ctx context.Context, _ none) (loginStatus, error) {
@@ -93,6 +98,13 @@ func newServer(c *portal.Client) *mcp.Server {
 		})
 	tool(s, c, "list_lehrkraefte", "Lehrkräfte, denen man schreiben kann (ID, Name, Funktion).",
 		func(ctx context.Context, _ kindArg) (portal.Lehrkraefte, error) { return c.Lehrkraefte(ctx) })
+	if !allowWrite {
+		return s
+	}
+	tool(s, c, "elternbrief_bestaetigen", "Bestätigt den Empfang eines Elternbriefs im Portal (für die Schule sichtbar). Vorher User fragen.",
+		func(ctx context.Context, in nummerArgs) (portal.Elternbrief, error) {
+			return c.ElternbriefBestaetigen(ctx, in.Nummer)
+		})
 	return s
 }
 
@@ -101,7 +113,7 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := newServer(portal.New(cfg)).Run(context.Background(), &mcp.StdioTransport{}); err != nil {
+	if err := newServer(portal.New(cfg), cfg.AllowWrite).Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)
 	}
 }

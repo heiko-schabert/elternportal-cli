@@ -22,17 +22,19 @@ const loginPage = `<html><form class="form-signin"><input type="hidden" name="cs
 // sessions get the login page with HTTP 200, like the real one.
 type fakePortal struct {
 	*httptest.Server
-	mu     sync.Mutex
-	valid  map[string]bool
-	logins int
-	pages  map[string]string
-	child  string
-	hits   map[string]int
+	mu        sync.Mutex
+	valid     map[string]bool
+	logins    int
+	pages     map[string]string
+	child     string
+	hits      map[string]int
+	lastQuery map[string]string
+	onHit     func(path string)
 }
 
 func newFakePortal(t *testing.T, pages map[string]string) *fakePortal {
 	t.Helper()
-	f := &fakePortal{valid: map[string]bool{}, pages: pages, hits: map[string]int{}}
+	f := &fakePortal{valid: map[string]bool{}, pages: pages, hits: map[string]int{}, lastQuery: map[string]string{}}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Close)
 	return f
@@ -59,6 +61,10 @@ func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	f.hits[r.URL.Path]++
+	f.lastQuery[r.URL.Path] = r.URL.RawQuery
+	if f.onHit != nil {
+		f.onHit(r.URL.Path)
+	}
 	switch r.URL.Path {
 	case "/api/set_child.php":
 		f.child = r.URL.Query().Get("id")

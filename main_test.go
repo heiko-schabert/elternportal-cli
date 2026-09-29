@@ -12,11 +12,11 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-func connect(t *testing.T, c *portal.Client) *mcp.ClientSession {
+func connect(t *testing.T, c *portal.Client, allowWrite bool) *mcp.ClientSession {
 	t.Helper()
 	ctx := context.Background()
 	ct, st := mcp.NewInMemoryTransports()
-	if _, err := newServer(c).Connect(ctx, st, nil); err != nil {
+	if _, err := newServer(c, allowWrite).Connect(ctx, st, nil); err != nil {
 		t.Fatal(err)
 	}
 	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).Connect(ctx, ct, nil)
@@ -28,7 +28,7 @@ func connect(t *testing.T, c *portal.Client) *mcp.ClientSession {
 }
 
 func TestTools(t *testing.T) {
-	cs := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}))
+	cs := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), false)
 	res, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -45,7 +45,7 @@ func TestTools(t *testing.T) {
 }
 
 func TestToolError(t *testing.T) {
-	cs := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}))
+	cs := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), false)
 	res, err := cs.CallTool(context.Background(), &mcp.CallToolParams{Name: "check_login", Arguments: map[string]any{}})
 	if err != nil {
 		t.Fatal(err)
@@ -56,7 +56,7 @@ func TestToolError(t *testing.T) {
 }
 
 func TestKindParamInSchema(t *testing.T) {
-	cs := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}))
+	cs := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), false)
 	res, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
@@ -71,5 +71,25 @@ func TestKindParamInSchema(t *testing.T) {
 				t.Errorf("schema %s lacks %s", b, p)
 			}
 		}
+	}
+}
+
+func TestWriteToolsGated(t *testing.T) {
+	names := func(allow bool) []string {
+		res, err := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), allow).ListTools(context.Background(), nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var n []string
+		for _, tl := range res.Tools {
+			n = append(n, tl.Name)
+		}
+		return n
+	}
+	if slices.Contains(names(false), "elternbrief_bestaetigen") {
+		t.Fatal("write tool registered without allowWrite")
+	}
+	if !slices.Contains(names(true), "elternbrief_bestaetigen") {
+		t.Fatal("write tool missing with allowWrite")
 	}
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/url"
 	"regexp"
 	"strconv"
 	"strings"
@@ -23,6 +24,7 @@ type Elternbrief struct {
 
 	downloadURL string
 	inline      string
+	id          string // confirmation ID from the header cell "empf_<id>"
 }
 
 type Elternbriefe struct {
@@ -64,6 +66,8 @@ func parseElternbriefe(s *goquery.Selection) []Elternbrief {
 		i++
 		nr, _ := strconv.Atoi(m[1])
 		b := Elternbrief{Nummer: nr, Bestaetigt: !strings.Contains(head, "noch nicht")}
+		id, _ := rows.Eq(i - 1).Find(`td[id^="empf_"]`).Attr("id")
+		b.id = strings.TrimPrefix(id, "empf_")
 		el := body.Find("a.link_nachrichten").First()
 		if el.Length() > 0 {
 			b.HatDatei = true
@@ -131,4 +135,31 @@ func (c *Client) Elternbrief(ctx context.Context, nummer int, titel string) (Elt
 	}
 	out.Inhalt = strings.TrimSpace(b.inline + "\n\n" + pdf)
 	return out, nil
+}
+
+// ElternbriefBestaetigen confirms receipt and reloads the list, so the
+// returned status is what the portal now shows.
+func (c *Client) ElternbriefBestaetigen(ctx context.Context, nummer int) (Elternbrief, error) {
+	s, err := c.page(ctx, elternbriefePath)
+	if err != nil {
+		return Elternbrief{}, err
+	}
+	b, err := findBrief(parseElternbriefe(s), nummer, "")
+	if err != nil || b.Bestaetigt {
+		return b, err
+	}
+	if b.id == "" {
+		return Elternbrief{}, fmt.Errorf("Elternbrief #%d: Bestätigungs-ID fehlt", nummer)
+	}
+	if _, _, err := c.fetch(ctx, "/api/elternbrief_bestaetigen.php?eb="+url.QueryEscape(b.id)); err != nil {
+		return Elternbrief{}, err
+	}
+	if s, err = c.page(ctx, elternbriefePath); err != nil {
+		return Elternbrief{}, err
+	}
+	b, err = findBrief(parseElternbriefe(s), nummer, "")
+	if err == nil && !b.Bestaetigt {
+		err = fmt.Errorf("Elternbrief #%d: Portal zeigt weiterhin unbestätigt", nummer)
+	}
+	return b, err
 }
