@@ -93,11 +93,7 @@ func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
 	if !ok {
 		body = kinderPage(f.child)
 	}
-	ct := "text/html; charset=utf-8"
-	if strings.HasPrefix(body, "%PDF") {
-		ct = "application/pdf"
-	}
-	w.Header().Set("Content-Type", ct)
+	w.Header().Set("Content-Type", http.DetectContentType([]byte(body)))
 	io.WriteString(w, body)
 }
 
@@ -227,5 +223,15 @@ func TestContentModulAus(t *testing.T) {
 	_, err = content(b, "text/html; charset=utf-8", "/service/vertretungsplan")
 	if err == nil || !strings.Contains(err.Error(), "nicht aktiv") {
 		t.Fatalf("err = %v, want module-inactive error", err)
+	}
+}
+
+func TestCheckLoginTwice(t *testing.T) {
+	f := newFakePortal(t, nil)
+	c := f.client("p")
+	for i := range 2 {
+		if err := c.CheckLogin(context.Background()); err != nil {
+			t.Fatalf("attempt %d: %v", i+1, err)
+		}
 	}
 }

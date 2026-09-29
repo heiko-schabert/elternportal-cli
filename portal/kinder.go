@@ -2,6 +2,7 @@ package portal
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -99,8 +100,15 @@ func (c *Client) selectKind(ctx context.Context, name string) error {
 		return err
 	}
 	c.want = k.ID
-	return c.applyKind(ctx)
+	if err := c.applyKind(ctx); !errors.Is(err, errExpired) {
+		return err
+	}
+	// Session expired since the last request; login re-applies c.want.
+	return c.login(ctx)
 }
+
+// errExpired reports that the portal answered with its login page.
+var errExpired = errors.New("Session abgelaufen")
 
 // applyKind restores the wanted child; each login resets it to the portal default.
 func (c *Client) applyKind(ctx context.Context) error {
@@ -110,6 +118,9 @@ func (c *Client) applyKind(ctx context.Context) error {
 	body, _, err := c.do(ctx, http.MethodPost, "/api/set_child.php?id="+url.QueryEscape(c.want), nil)
 	if err != nil {
 		return err
+	}
+	if isLoginPage(body) {
+		return errExpired
 	}
 	if strings.TrimSpace(string(body)) != "1" {
 		return fmt.Errorf("Kindwechsel zu %s fehlgeschlagen", c.want)

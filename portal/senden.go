@@ -54,7 +54,8 @@ func (c *Client) Antworten(ctx context.Context, lehrerID, threadID int, text str
 	if err != nil {
 		return Thread{}, err
 	}
-	if n := len(th.Beitraege); n == 0 || th.Beitraege[n-1].Text != text {
+	// The portal renders line breaks as <br>, so compare whitespace-insensitively.
+	if n := len(th.Beitraege); n == 0 || norm(th.Beitraege[n-1].Text) != norm(text) {
 		return th, errors.New("gesendet, aber Nachricht nicht im Thread sichtbar; im Portal prüfen")
 	}
 	return th, nil
@@ -62,7 +63,8 @@ func (c *Client) Antworten(ctx context.Context, lehrerID, threadID int, text str
 
 // NeueNachricht starts a thread and returns it from the refreshed list.
 func (c *Client) NeueNachricht(ctx context.Context, lehrerID int, betreff, text string) (Nachricht, error) {
-	betreff, text = strings.TrimSpace(betreff), strings.TrimSpace(text)
+	// The list shows the subject whitespace-collapsed; send it that way to find it again.
+	betreff, text = norm(betreff), strings.TrimSpace(text)
 	switch {
 	case betreff == "" || text == "":
 		return Nachricht{}, errors.New("betreff und text nötig")

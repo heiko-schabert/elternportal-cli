@@ -51,6 +51,8 @@ func (c *Client) CheckLogin(ctx context.Context) error {
 
 func (c *Client) login(ctx context.Context) error {
 	c.loggedIn = false
+	// Stale cookies would make "/" the start page, which has no login form.
+	c.http.Jar, _ = cookiejar.New(nil)
 	body, ct, err := c.do(ctx, http.MethodGet, "/", nil)
 	if err != nil {
 		return err
@@ -220,8 +222,12 @@ func (c *Client) download(ctx context.Context, href string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if strings.Contains(ct, "html") {
+	sniffed := http.DetectContentType(raw)
+	if strings.Contains(ct, "html") || strings.Contains(sniffed, "html") {
 		return "", fmt.Errorf("%s: Download lieferte HTML statt Datei", path)
+	}
+	if !bytes.HasPrefix(raw, []byte("%PDF-")) {
+		return fmt.Sprintf("(Anhang %s, kein Text)", sniffed), nil
 	}
 	txt, err := pdfText(ctx, raw)
 	if errors.Is(err, exec.ErrNotFound) {
@@ -255,7 +261,8 @@ func (c *Client) postMultipart(ctx context.Context, path string, fields map[stri
 	defer c.mu.Unlock()
 	resp, err := c.http.Do(req)
 	if err != nil {
-		return err
+		// The portal may have stored the message before the connection failed.
+		return fmt.Errorf("POST %s: %w; Status unbekannt, im Portal prüfen vor erneutem Senden", path, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)

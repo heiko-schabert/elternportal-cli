@@ -152,7 +152,7 @@ func (c *Client) ungelesen(ctx context.Context, threadID int) (bool, error) {
 			}
 		}
 	}
-	return false, nil
+	return false, fmt.Errorf("Thread %d nicht in der Liste; lehrer_id und thread_id aus list_nachrichten nehmen", threadID)
 }
 
 func parseThread(d *goquery.Document) (Thread, error) {

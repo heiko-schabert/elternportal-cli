@@ -78,3 +78,13 @@ func TestKindReappliedAfterRelogin(t *testing.T) {
 		t.Fatalf("got %q, want 1907", got)
 	}
 }
+
+func TestSwitchKindAfterExpiry(t *testing.T) {
+	f := newFakePortal(t, nil)
+	c := f.client("p")
+	useKindPage(t, c, "ben")
+	f.expire()
+	if got := useKindPage(t, c, "anna"); got != "1906" {
+		t.Fatalf("got %q, want 1906", got)
+	}
+}

@@ -108,3 +108,26 @@ func TestNachrichtOeffnen(t *testing.T) {
 		t.Fatalf("attachment = %q", got)
 	}
 }
+
+func TestNachrichtBildAnhang(t *testing.T) {
+	f := nachrichtenPortal(t)
+	f.pages["/aktuelles/get_file/"] = "\x89PNG\r\n\x1a\n bild"
+	th, err := f.client("p").Nachricht(context.Background(), 29, 146807, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := th.Beitraege[0].Anhaenge[0].Inhalt; !strings.Contains(got, "kein Text") {
+		t.Fatalf("attachment = %q", got)
+	}
+}
+
+func TestNachrichtUnbekannt(t *testing.T) {
+	f := nachrichtenPortal(t)
+	_, err := f.client("p").Nachricht(context.Background(), 1, 1, false)
+	if err == nil || !strings.Contains(err.Error(), "nicht in der Liste") {
+		t.Fatalf("err = %v, want not-found guard", err)
+	}
+	if f.hits[fachlehrerPath+"/1/1"] != 0 {
+		t.Fatal("unknown thread was opened")
+	}
+}
