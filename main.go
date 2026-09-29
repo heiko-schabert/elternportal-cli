@@ -106,7 +106,8 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 		func(ctx context.Context, _ childArg) (portal.Letters, error) { return c.Letters(ctx) })
 	tool(s, c, "get_letter", "Content of a parent letter as text. Pass number (exact) or title (substring, newest match).",
 		func(ctx context.Context, in letterArgs) (portal.LetterContent, error) {
-			return c.Letter(ctx, in.Number, in.Title)
+			out, _, err := c.Letter(ctx, in.Number, in.Title, false)
+			return out, err
 		})
 	tool(s, c, "list_children", "Children on the account (ID, name, class). Names for the child parameter of other tools.",
 		func(ctx context.Context, _ none) (portal.Children, error) { return c.Children(ctx) })
@@ -116,7 +117,8 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 		})
 	tool(s, c, "get_message", "Full thread with all posts and attachments as text. Unread threads only with open_unread=true (marks them read); ask the user first.",
 		func(ctx context.Context, in threadArgs) (portal.Thread, error) {
-			return c.Message(ctx, in.ThreadID, in.OpenUnread)
+			out, _, err := c.Message(ctx, in.ThreadID, in.OpenUnread, false)
+			return out, err
 		})
 	tool(s, c, "list_teachers", "Teachers you can write to (ID, name, role).",
 		func(ctx context.Context, _ childArg) (portal.Teachers, error) { return c.Teachers(ctx) })

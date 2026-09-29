@@ -88,7 +88,7 @@ func messagesPortal(t *testing.T) *fakePortal {
 
 func TestMessageUnreadGuard(t *testing.T) {
 	f := messagesPortal(t)
-	_, err := f.client("p").Message(context.Background(), 148884, false)
+	_, _, err := f.client("p").Message(context.Background(), 148884, false, false)
 	if err == nil || !strings.Contains(err.Error(), "unread") {
 		t.Fatalf("err = %v, want unread guard", err)
 	}
@@ -100,7 +100,7 @@ func TestMessageUnreadGuard(t *testing.T) {
 func TestMessageOpen(t *testing.T) {
 	t.Setenv("PATH", "")
 	f := messagesPortal(t)
-	th, err := f.client("p").Message(context.Background(), 148884, true)
+	th, _, err := f.client("p").Message(context.Background(), 148884, true, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func TestMessageOpen(t *testing.T) {
 func TestMessageImageAttachment(t *testing.T) {
 	f := messagesPortal(t)
 	f.pages["/aktuelles/get_file/"] = "\x89PNG\r\n\x1a\n bild"
-	th, err := f.client("p").Message(context.Background(), 146807, false)
+	th, _, err := f.client("p").Message(context.Background(), 146807, false, false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -123,7 +123,7 @@ func TestMessageImageAttachment(t *testing.T) {
 
 func TestMessageUnknown(t *testing.T) {
 	f := messagesPortal(t)
-	_, err := f.client("p").Message(context.Background(), 1, false)
+	_, _, err := f.client("p").Message(context.Background(), 1, false, false)
 	if err == nil || !strings.Contains(err.Error(), "not in the list") {
 		t.Fatalf("err = %v, want not-found guard", err)
 	}
@@ -137,7 +137,7 @@ func TestMessageUnknown(t *testing.T) {
 func TestMessageTeacherFromList(t *testing.T) {
 	t.Setenv("PATH", "")
 	f := messagesPortal(t)
-	if _, err := f.client("p").Message(context.Background(), 148884, true); err != nil {
+	if _, _, err := f.client("p").Message(context.Background(), 148884, true, false); err != nil {
 		t.Fatal(err)
 	}
 	if f.hits[teacherMessagesPath+"/62/148884"] != 1 {

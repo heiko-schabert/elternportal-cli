@@ -12,7 +12,7 @@ import (
 func TestParseLetters(t *testing.T) {
 	got := parseLetters(fixture(t, "elternbriefe.html"))
 	want := []Letter{
-		{Number: 134, Title: "Wandertag", Date: "20.09.2026, 17:30", Classes: "6C, 6D", HasFile: true, downloadURL: "aktuelles/get_file/?repo=134&csrf=c0ffee", id: "1300", inline: "Anbei die Infos zum Wandertag."},
+		{Number: 134, Title: "Wandertag", Date: "20.09.2026, 17:30", Classes: "6C, 6D", HasFile: true, FileName: "Wandertag.pdf", downloadURL: "aktuelles/get_file/?repo=134&csrf=c0ffee", id: "1300", inline: "Anbei die Infos zum Wandertag."},
 		{Number: 133, Title: "Elternabend", Date: "15.09.2026, 08:00", Classes: "6C", Confirmed: true, id: "1299", inline: "Sehr geehrte Eltern,\nder Elternabend findet am 1.10. statt.\nMit freundlichen Grüßen\ni.A."},
 		{Number: 120, Title: "Elternabend Nachtrag", Date: "01.09.2026, 08:00", Classes: "6C", Confirmed: true, id: "1200", inline: "Raum 101."},
 	}
@@ -50,7 +50,7 @@ func letterPortal(t *testing.T, download string) *Client {
 }
 
 func TestLetterInline(t *testing.T) {
-	got, err := letterPortal(t, "").Letter(context.Background(), 133, "")
+	got, _, err := letterPortal(t, "").Letter(context.Background(), 133, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -60,7 +60,7 @@ func TestLetterInline(t *testing.T) {
 }
 
 func TestLetterDownloadHTML(t *testing.T) {
-	_, err := letterPortal(t, "<html>Fehler</html>").Letter(context.Background(), 134, "")
+	_, _, err := letterPortal(t, "<html>Fehler</html>").Letter(context.Background(), 134, "", false)
 	if err == nil || !strings.Contains(err.Error(), "HTML") {
 		t.Fatalf("err = %v, want HTML download error", err)
 	}
@@ -68,7 +68,7 @@ func TestLetterDownloadHTML(t *testing.T) {
 
 func TestLetterWithoutPdftotext(t *testing.T) {
 	t.Setenv("PATH", "")
-	got, err := letterPortal(t, "%PDF-1.4 dummy").Letter(context.Background(), 134, "")
+	got, _, err := letterPortal(t, "%PDF-1.4 dummy").Letter(context.Background(), 134, "", false)
 	if err != nil {
 		t.Fatal(err)
 	}

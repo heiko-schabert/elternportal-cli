@@ -32,7 +32,7 @@ func (c *Client) Reply(ctx context.Context, threadID int, text string) (Thread, 
 	if text == "" {
 		return Thread{}, errors.New("text empty")
 	}
-	m, err := c.findThread(ctx, threadID)
+	m, err := c.FindThread(ctx, threadID)
 	if err != nil {
 		return Thread{}, err
 	}

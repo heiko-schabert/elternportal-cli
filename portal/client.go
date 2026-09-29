@@ -10,7 +10,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
-	"os/exec"
 	"strings"
 	"sync"
 	"time"
@@ -210,30 +209,6 @@ func (c *Client) doc(ctx context.Context, path string) (*goquery.Document, error
 		return nil, err
 	}
 	return parseHTML(b, ct)
-}
-
-// download returns an attachment as text.
-func (c *Client) download(ctx context.Context, href string) (string, error) {
-	path, err := c.resolve(href)
-	if err != nil {
-		return "", err
-	}
-	raw, ct, err := c.fetch(ctx, path)
-	if err != nil {
-		return "", err
-	}
-	sniffed := http.DetectContentType(raw)
-	if strings.Contains(ct, "html") || strings.Contains(sniffed, "html") {
-		return "", fmt.Errorf("%s: download returned HTML instead of a file", path)
-	}
-	if !bytes.HasPrefix(raw, []byte("%PDF-")) {
-		return fmt.Sprintf("(attachment %s, no text)", sniffed), nil
-	}
-	txt, err := pdfText(ctx, raw)
-	if errors.Is(err, exec.ErrNotFound) {
-		return "(pdftotext not installed, PDF text unavailable)", nil
-	}
-	return txt, err
 }
 
 // postMultipart submits a portal form. A stale csrf token lands on the login

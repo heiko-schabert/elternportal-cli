@@ -108,42 +108,75 @@ func parseMessages(d *goquery.Document) (Messages, error) {
 	return out, nil
 }
 
-// Message opens a thread. The portal marks threads read on open, so unread
-// ones need openUnread to avoid clearing the marker behind the user's back.
-func (c *Client) Message(ctx context.Context, threadID int, openUnread bool) (Thread, error) {
-	m, err := c.findThread(ctx, threadID)
+// Message returns a thread with its attachments' text; withFiles also keeps
+// the originals.
+func (c *Client) Message(ctx context.Context, threadID int, openUnread, withFiles bool) (Thread, []File, error) {
+	m, err := c.FindThread(ctx, threadID)
 	if err != nil {
-		return Thread{}, err
+		return Thread{}, nil, err
 	}
+	th, err := c.openThread(ctx, m, openUnread)
+	if err != nil {
+		return Thread{}, nil, err
+	}
+	var files []File
+	for i := range th.Posts {
+		for j := range th.Posts[i].Attachments {
+			a := &th.Posts[i].Attachments[j]
+			f, err := c.Download(ctx, attachmentRef(m, *a))
+			if err == nil {
+				a.Content, err = fileText(ctx, f)
+			}
+			if err != nil {
+				return Thread{}, nil, fmt.Errorf("attachment %s: %w", a.Name, err)
+			}
+			if withFiles {
+				files = append(files, f)
+			}
+		}
+	}
+	return th, files, nil
+}
+
+// ThreadFiles lists a thread's attachments without downloading them.
+func (c *Client) ThreadFiles(ctx context.Context, m Message, openUnread bool) ([]FileRef, error) {
+	th, err := c.openThread(ctx, m, openUnread)
+	if err != nil {
+		return nil, err
+	}
+	var refs []FileRef
+	for _, p := range th.Posts {
+		for _, a := range p.Attachments {
+			refs = append(refs, attachmentRef(m, a))
+		}
+	}
+	return refs, nil
+}
+
+// openThread loads a thread page. The portal marks threads read on open, so
+// unread ones need openUnread to avoid clearing the marker behind the user's back.
+func (c *Client) openThread(ctx context.Context, m Message, openUnread bool) (Thread, error) {
 	if m.Unread && !openUnread {
-		return Thread{}, fmt.Errorf("thread %d is unread; opening marks it read. Confirm with open_unread=true", threadID)
+		return Thread{}, fmt.Errorf("thread %d is unread; opening marks it read. Confirm with open_unread=true", m.ThreadID)
 	}
 	d, err := c.doc(ctx, threadPath(m))
 	if err != nil {
 		return Thread{}, err
 	}
-	th, err := parseThread(d)
-	if err != nil {
-		return Thread{}, err
-	}
-	for i := range th.Posts {
-		for j := range th.Posts[i].Attachments {
-			a := &th.Posts[i].Attachments[j]
-			if a.Content, err = c.download(ctx, a.href); err != nil {
-				return Thread{}, fmt.Errorf("attachment %s: %w", a.Name, err)
-			}
-		}
-	}
-	return th, nil
+	return parseThread(d)
+}
+
+func attachmentRef(m Message, a Attachment) FileRef {
+	return FileRef{Name: fmt.Sprintf("thread-%d-%s", m.ThreadID, safeName(a.Name)), href: a.href}
 }
 
 func threadPath(m Message) string {
 	return fmt.Sprintf("%s/%d/%d", teacherMessagesPath, m.TeacherID, m.ThreadID)
 }
 
-// findThread looks a thread up in the list; its URL needs the teacher ID,
+// FindThread looks a thread up in the list; its URL needs the teacher ID,
 // which only the list reveals.
-func (c *Client) findThread(ctx context.Context, threadID int) (Message, error) {
+func (c *Client) FindThread(ctx context.Context, threadID int) (Message, error) {
 	for page, pages := 1, 1; page <= pages; page++ {
 		n, err := c.Messages(ctx, page)
 		if err != nil {
