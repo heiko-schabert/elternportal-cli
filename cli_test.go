@@ -129,7 +129,7 @@ func fakePortal(t *testing.T) *portal.Client {
 }
 
 func TestRunCall(t *testing.T) {
-	code, out, errOut := runCLI(t, fakePortal(t), "bulletin")
+	code, out, errOut := runCLI(t, fakePortal(t), "--json", "bulletin")
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
@@ -258,7 +258,7 @@ func TestSyncCommand(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
 	}
-	if _, err := os.Stat(filepath.Join(dir, "letter-7-brief.pdf")); err != nil || !strings.Contains(out, `"saved"`) {
+	if _, err := os.Stat(filepath.Join(dir, "letter-7-brief.pdf")); err != nil || !strings.Contains(out, "Saved:") {
 		t.Fatalf("stat %v, stdout %q", err, out)
 	}
 }
@@ -283,5 +283,19 @@ func TestLogLevelFromEnv(t *testing.T) {
 	code, _, errOut := runCLI(t, fakePortal(t), "bulletin")
 	if code != 0 || !strings.Contains(errOut, "level=DEBUG") {
 		t.Fatalf("exit %d, stderr %q", code, errOut)
+	}
+}
+
+func TestHumanOutputDefault(t *testing.T) {
+	code, out, errOut := runCLI(t, fakePortal(t), "bulletin")
+	if code != 0 || !strings.Contains(out, "TITLE") || !strings.Contains(out, "Mensa") || strings.Contains(out, "{") {
+		t.Fatalf("exit %d, stderr %q, stdout:\n%s", code, errOut, out)
+	}
+}
+
+func TestHumanOutputKeepsFieldOrder(t *testing.T) {
+	code, out, errOut := runCLI(t, fakePortal(t), "letters")
+	if code != 0 || !strings.HasPrefix(out, "NUMBER  TITLE") {
+		t.Fatalf("exit %d, stderr %q, stdout:\n%s", code, errOut, out)
 	}
 }

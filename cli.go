@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"elternportal-cli/portal"
 	"encoding/json"
@@ -104,7 +105,7 @@ func toolCommand(cs *mcp.ClientSession, t *mcp.Tool, ready func() error) (*cobra
 			if err != nil {
 				return err
 			}
-			return printJSON(cmd.OutOrStdout(), res.StructuredContent)
+			return output(cmd, resultJSON(res))
 		},
 	}
 	addFlags(cmd, s)
@@ -133,13 +134,13 @@ func run(ctx context.Context, srv *mcp.Server, c *portal.Client, ready func() er
 	}
 	root := &cobra.Command{
 		Use:   "elternportal-cli",
-		Short: "Eltern-Portal from the terminal; JSON output",
-		Long: `Eltern-Portal from the terminal; JSON output.
+		Short: "Eltern-Portal from the terminal",
+		Long: `Eltern-Portal from the terminal; human-readable output, --json for scripts.
 
 Credentials: ELTERNPORTAL_URL, ELTERNPORTAL_USER, ELTERNPORTAL_PASSWORD
 as environment variables or in ~/.config/elternportal/env.
 Write commands require ELTERNPORTAL_ALLOW_WRITE=1.`,
-		Example:       "  elternportal-cli letter --number 49 | jq -r .content",
+		Example:       "  elternportal-cli letter --number 49\n  elternportal-cli letters --json | jq .letters[0]",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -148,6 +149,7 @@ Write commands require ELTERNPORTAL_ALLOW_WRITE=1.`,
 	if level == "" {
 		level = "warn"
 	}
+	root.PersistentFlags().Bool("json", false, "print JSON instead of human-readable output")
 	root.PersistentFlags().StringVar(&level, "log-level", level, "debug, info, warn or error (env ELTERNPORTAL_LOG_LEVEL)")
 	root.PersistentPreRunE = func(*cobra.Command, []string) error {
 		var l slog.Level
@@ -217,13 +219,34 @@ func callTool(ctx context.Context, cs *mcp.ClientSession, name string, args map[
 	return res, nil
 }
 
-func printJSON(w io.Writer, v any) error {
-	b, err := json.MarshalIndent(v, "", "  ")
+// output prints v as indented JSON with --json, otherwise rendered for humans.
+func output(cmd *cobra.Command, v any) error {
+	b, err := json.Marshal(v)
 	if err != nil {
 		return err
 	}
-	fmt.Fprintln(w, string(b))
-	return nil
+	if asJSON, _ := cmd.Flags().GetBool("json"); !asJSON {
+		return render(cmd.OutOrStdout(), b)
+	}
+	var out bytes.Buffer
+	if err := json.Indent(&out, b, "", "  "); err != nil {
+		return err
+	}
+	out.WriteString("\n")
+	_, err = out.WriteTo(cmd.OutOrStdout())
+	return err
+}
+
+// resultJSON prefers the tool's JSON text, which keeps field order;
+// StructuredContent arrives as a map.
+func resultJSON(res *mcp.CallToolResult) json.RawMessage {
+	for _, c := range res.Content {
+		if t, ok := c.(*mcp.TextContent); ok && json.Valid([]byte(t.Text)) {
+			return json.RawMessage(t.Text)
+		}
+	}
+	b, _ := json.Marshal(res.StructuredContent)
+	return b
 }
 
 // downloadCommand saves the files that get_letter/get_message embed, so the
@@ -274,7 +297,7 @@ func downloadCommand(cs *mcp.ClientSession, ready func() error) *cobra.Command {
 				slog.InfoContext(cmd.Context(), "saved file", "path", p)
 				saved = append(saved, p)
 			}
-			return printJSON(cmd.OutOrStdout(), map[string][]string{"files": saved})
+			return output(cmd, map[string][]string{"files": saved})
 		},
 	}
 	cmd.Flags().IntVar(&letter, "letter", 0, "letter number")
@@ -306,7 +329,7 @@ func syncCommand(c *portal.Client, ready func() error) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			return printJSON(cmd.OutOrStdout(), res)
+			return output(cmd, res)
 		},
 	}
 	cmd.Flags().StringVar(&dir, "dir", "", "archive directory")

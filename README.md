@@ -1,6 +1,6 @@
 # elternportal-cli
 
-Command line for [Eltern-Portal](https://www.eltern-portal.org) (art soft and more), the parent portal used by many German schools: parent letters, exams, events, bulletin board, substitution plan and teacher messages, as JSON on stdout. `elternportal-cli mcp` exposes the same commands as an MCP server for AI assistants.
+Command line for [Eltern-Portal](https://www.eltern-portal.org) (art soft and more), the parent portal used by many German schools: parent letters, exams, events, bulletin board, substitution plan and teacher messages, readable in the terminal or as JSON. `elternportal-cli mcp` exposes the same commands as an MCP server for AI assistants.
 
 Portal content (letters, messages, notices) stays German; only the tool's interface is English.
 
@@ -31,9 +31,10 @@ Logs go to stderr, so stdout stays clean JSON (or MCP protocol). `debug` logs ev
 ```bash
 elternportal-cli                                  # command overview
 elternportal-cli message -h                       # flags of one command
-elternportal-cli letters | jq '.letters[:5]'
-elternportal-cli letter --number 49 | jq -r .content
-elternportal-cli messages | jq '.messages[] | select(.unread)'
+elternportal-cli letters                          # table
+elternportal-cli letter --number 49
+elternportal-cli letter --number 49 --json | jq -r .content
+elternportal-cli messages --json | jq '.messages[] | select(.unread)'
 ELTERNPORTAL_ALLOW_WRITE=1 elternportal-cli reply --thread-id 146807 --text 'Danke!'
 elternportal-cli completion fish | source
 ```
@@ -49,7 +50,7 @@ elternportal-cli completion fish | source
 | `contact-class-teacher` | Kommunikation Eltern/Klassenleitung |
 | `children` | child selector |
 
-Errors go to stderr with exit code 1.
+Output is human-readable by default (tables, `Label: value`, texts as paragraphs); `--json` prints the raw result for scripts. Errors go to stderr with exit code 1.
 
 ### Original files
 

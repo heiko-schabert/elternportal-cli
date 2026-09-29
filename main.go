@@ -98,10 +98,11 @@ func toolFiles[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, 
 			start := time.Now()
 			out, files, err := fn(ctx, in)
 			slog.InfoContext(ctx, "tool call", "tool", name, "files", len(files), "duration", time.Since(start).Round(time.Millisecond), "err", err)
-			if err != nil || len(files) == 0 {
+			if err != nil {
 				return nil, out, err
 			}
-			// Once Content is set the SDK no longer adds the JSON text itself.
+			// The SDK's own JSON text comes from a map and loses field order,
+			// which the CLI's tables rely on; with Content set it adds none.
 			b, err := json.Marshal(out)
 			if err != nil {
 				return nil, zero, err
