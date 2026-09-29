@@ -79,7 +79,8 @@ func parseMessages(d *goquery.Document) (Messages, error) {
 		return Messages{}, fmt.Errorf("%s: message table missing, portal layout changed?", teacherMessagesPath)
 	}
 	out := Messages{Page: 1, Pages: 1, Messages: []Message{}}
-	items := d.Find(".pagination.menu a.item")
+	// The page repeats the pagination menu above and below the table.
+	items := d.Find(".pagination.menu").First().Find("a.item")
 	if items.Length() > 0 {
 		out.Pages = items.Length()
 		out.Page = items.IndexOfSelection(items.Filter(".active")) + 1
