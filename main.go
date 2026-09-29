@@ -39,6 +39,30 @@ type nummerArgs struct {
 	Nummer int `json:"nummer" jsonschema:"Nummer des Elternbriefs"`
 }
 
+type antwortArgs struct {
+	kindArg
+	LehrerID int    `json:"lehrer_id" jsonschema:"lehrer_id aus list_nachrichten"`
+	ThreadID int    `json:"thread_id" jsonschema:"thread_id aus list_nachrichten"`
+	Text     string `json:"text" jsonschema:"Nachrichtentext"`
+}
+
+type neuArgs struct {
+	kindArg
+	LehrerID int    `json:"lehrer_id" jsonschema:"id aus list_lehrkraefte"`
+	Betreff  string `json:"betreff" jsonschema:"Betreff, max. 128 Zeichen"`
+	Text     string `json:"text" jsonschema:"Nachrichtentext"`
+}
+
+type anfrageArgs struct {
+	kindArg
+	Kontaktwunsch string `json:"kontaktwunsch" jsonschema:"Beratungsgespräch, Bericht über das Notenbild oder Telefontermin"`
+	Grund         string `json:"grund" jsonschema:"Grund für den Kontaktwunsch"`
+}
+
+type sentStatus struct {
+	Status string `json:"status"`
+}
+
 type kindArg struct {
 	Kind string `json:"kind,omitempty" jsonschema:"Vorname des Kindes; nur bei mehreren Kindern nötig"`
 }
@@ -104,6 +128,21 @@ func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 	tool(s, c, "elternbrief_bestaetigen", "Bestätigt den Empfang eines Elternbriefs im Portal (für die Schule sichtbar). Vorher User fragen.",
 		func(ctx context.Context, in nummerArgs) (portal.Elternbrief, error) {
 			return c.ElternbriefBestaetigen(ctx, in.Nummer)
+		})
+	tool(s, c, "send_nachricht", "Antwortet in einem bestehenden Thread an eine Lehrkraft. Sendet sofort — Text vorher mit User abstimmen.",
+		func(ctx context.Context, in antwortArgs) (portal.Thread, error) {
+			return c.Antworten(ctx, in.LehrerID, in.ThreadID, in.Text)
+		})
+	tool(s, c, "neue_nachricht", "Startet eine neue Konversation mit einer Lehrkraft. Sendet sofort — Text vorher mit User abstimmen.",
+		func(ctx context.Context, in neuArgs) (portal.Nachricht, error) {
+			return c.NeueNachricht(ctx, in.LehrerID, in.Betreff, in.Text)
+		})
+	tool(s, c, "klassenleitung_anfrage", "Sendet eine Kontaktanfrage an die Klassenleitung. Sendet sofort — vorher mit User abstimmen.",
+		func(ctx context.Context, in anfrageArgs) (sentStatus, error) {
+			if err := c.KlassenleitungAnfrage(ctx, in.Kontaktwunsch, in.Grund); err != nil {
+				return sentStatus{}, err
+			}
+			return sentStatus{Status: "gesendet"}, nil
 		})
 	return s
 }

@@ -89,7 +89,12 @@ func TestWriteToolsGated(t *testing.T) {
 	if slices.Contains(names(false), "elternbrief_bestaetigen") {
 		t.Fatal("write tool registered without allowWrite")
 	}
-	if !slices.Contains(names(true), "elternbrief_bestaetigen") {
-		t.Fatal("write tool missing with allowWrite")
+	for _, n := range []string{"elternbrief_bestaetigen", "send_nachricht", "neue_nachricht", "klassenleitung_anfrage"} {
+		if slices.Contains(names(false), n) {
+			t.Errorf("%s registered without allowWrite", n)
+		}
+		if !slices.Contains(names(true), n) {
+			t.Errorf("%s missing with allowWrite", n)
+		}
 	}
 }

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/cookiejar"
 	"net/url"
@@ -227,4 +228,46 @@ func (c *Client) download(ctx context.Context, href string) (string, error) {
 		return "(pdftotext nicht installiert, PDF-Text nicht verfügbar)", nil
 	}
 	return txt, err
+}
+
+// postMultipart submits a portal form. A stale csrf token lands on the login
+// page; retrying would need a fresh form, so the caller gets an error instead.
+func (c *Client) postMultipart(ctx context.Context, path string, fields map[string]string) error {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	for k, v := range fields {
+		if err := w.WriteField(k, v); err != nil {
+			return err
+		}
+	}
+	if err := w.Close(); err != nil {
+		return err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.cfg.URL+path, &buf)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	req.Header.Set("User-Agent", userAgent)
+	req.Header.Set("Origin", c.cfg.URL)
+	req.Header.Set("Referer", c.cfg.URL+"/")
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	resp, err := c.http.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("POST %s: %s", path, resp.Status)
+	}
+	if isLoginPage(body) {
+		c.loggedIn = false
+		return fmt.Errorf("POST %s: Session abgelaufen, nicht gesendet; erneut versuchen", path)
+	}
+	return nil
 }

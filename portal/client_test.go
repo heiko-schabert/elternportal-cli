@@ -7,6 +7,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -30,11 +31,13 @@ type fakePortal struct {
 	hits      map[string]int
 	lastQuery map[string]string
 	onHit     func(path string)
+	posts     map[string]url.Values
+	onPost    func(path string, v map[string][]string)
 }
 
 func newFakePortal(t *testing.T, pages map[string]string) *fakePortal {
 	t.Helper()
-	f := &fakePortal{valid: map[string]bool{}, pages: pages, hits: map[string]int{}, lastQuery: map[string]string{}}
+	f := &fakePortal{valid: map[string]bool{}, pages: pages, hits: map[string]int{}, lastQuery: map[string]string{}, posts: map[string]url.Values{}}
 	f.Server = httptest.NewServer(http.HandlerFunc(f.serve))
 	t.Cleanup(f.Close)
 	return f
@@ -64,6 +67,18 @@ func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
 	f.lastQuery[r.URL.Path] = r.URL.RawQuery
 	if f.onHit != nil {
 		f.onHit(r.URL.Path)
+	}
+	if r.Method == http.MethodPost && strings.HasPrefix(r.Header.Get("Content-Type"), "multipart/") {
+		if err := r.ParseMultipartForm(1 << 20); err != nil {
+			http.Error(w, err.Error(), http.StatusBadRequest)
+			return
+		}
+		f.posts[r.URL.Path] = r.MultipartForm.Value
+		if f.onPost != nil {
+			f.onPost(r.URL.Path, r.MultipartForm.Value)
+		}
+		http.Redirect(w, r, "/start", http.StatusFound)
+		return
 	}
 	switch r.URL.Path {
 	case "/api/set_child.php":
