@@ -12,68 +12,68 @@ import (
 
 type none struct{}
 
-type briefArgs struct {
-	kindArg
-	Nummer int    `json:"nummer,omitempty" jsonschema:"Nummer des Elternbriefs, z.B. 134"`
-	Titel  string `json:"titel,omitempty" jsonschema:"Teil des Titels, Groß/Klein egal"`
+type letterArgs struct {
+	childArg
+	Number int    `json:"number,omitempty" jsonschema:"letter number, e.g. 134"`
+	Title  string `json:"title,omitempty" jsonschema:"part of the title, case-insensitive"`
 }
 
 type loginStatus struct {
 	Status string `json:"status"`
 }
 
-type seiteArgs struct {
-	kindArg
-	Seite int `json:"seite,omitempty" jsonschema:"Seite der Liste, Standard 1"`
+type pageArgs struct {
+	childArg
+	Page int `json:"page,omitempty" jsonschema:"list page, default 1"`
 }
 
 type threadArgs struct {
-	kindArg
-	ThreadID         int  `json:"thread_id" jsonschema:"thread_id aus der Nachrichtenliste"`
-	UngelesenOeffnen bool `json:"ungelesen_oeffnen,omitempty" jsonschema:"true öffnet auch ungelesene Threads (markiert sie im Portal als gelesen)"`
+	childArg
+	ThreadID   int  `json:"thread_id" jsonschema:"thread_id from the message list"`
+	OpenUnread bool `json:"open_unread,omitempty" jsonschema:"also open unread threads (the portal marks them read)"`
 }
 
-type nummerArgs struct {
-	kindArg
-	Nummer int `json:"nummer" jsonschema:"Nummer des Elternbriefs"`
+type numberArgs struct {
+	childArg
+	Number int `json:"number" jsonschema:"letter number"`
 }
 
-type antwortArgs struct {
-	kindArg
-	ThreadID int    `json:"thread_id" jsonschema:"thread_id aus der Nachrichtenliste"`
-	Text     string `json:"text" jsonschema:"Nachrichtentext"`
+type replyArgs struct {
+	childArg
+	ThreadID int    `json:"thread_id" jsonschema:"thread_id from the message list"`
+	Text     string `json:"text" jsonschema:"message text"`
 }
 
-type neuArgs struct {
-	kindArg
-	LehrerID int    `json:"lehrer_id" jsonschema:"id aus der Lehrkräfteliste"`
-	Betreff  string `json:"betreff" jsonschema:"Betreff, max. 128 Zeichen"`
-	Text     string `json:"text" jsonschema:"Nachrichtentext"`
+type newMessageArgs struct {
+	childArg
+	TeacherID int    `json:"teacher_id" jsonschema:"id from the teacher list"`
+	Subject   string `json:"subject" jsonschema:"subject, max. 128 characters"`
+	Text      string `json:"text" jsonschema:"message text"`
 }
 
-type anfrageArgs struct {
-	kindArg
-	Kontaktwunsch string `json:"kontaktwunsch" jsonschema:"Beratungsgespräch, Bericht über das Notenbild oder Telefontermin"`
-	Grund         string `json:"grund" jsonschema:"Grund für den Kontaktwunsch"`
+type contactArgs struct {
+	childArg
+	RequestType string `json:"type" jsonschema:"one of the portal's German options: Beratungsgespräch (consultation), Bericht über das Notenbild (grade report), Telefontermin (phone call)"`
+	Reason      string `json:"reason" jsonschema:"reason for the request"`
 }
 
 type sentStatus struct {
 	Status string `json:"status"`
 }
 
-type kindArg struct {
-	Kind string `json:"kind,omitempty" jsonschema:"Vorname des Kindes; nur bei mehreren Kindern nötig"`
+type childArg struct {
+	Child string `json:"child,omitempty" jsonschema:"child's first name; only needed with several children"`
 }
 
-func (k kindArg) kindName() string { return k.Kind }
+func (k childArg) childName() string { return k.Child }
 
-// tool hides the SDK's result plumbing and, for inputs embedding kindArg,
+// tool hides the SDK's result plumbing and, for inputs embedding childArg,
 // selects the child for the duration of the call.
 func tool[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, fn func(context.Context, In) (Out, error)) {
 	mcp.AddTool(s, &mcp.Tool{Name: name, Description: desc},
 		func(ctx context.Context, _ *mcp.CallToolRequest, in In) (*mcp.CallToolResult, Out, error) {
-			if k, ok := any(in).(interface{ kindName() string }); ok {
-				release, err := c.UseKind(ctx, k.kindName())
+			if k, ok := any(in).(interface{ childName() string }); ok {
+				release, err := c.UseChild(ctx, k.childName())
 				if err != nil {
 					var zero Out
 					return nil, zero, err
@@ -87,60 +87,60 @@ func tool[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, fn fu
 
 func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
 	s := mcp.NewServer(&mcp.Implementation{Name: "elternportal", Version: "v0.1.0"}, nil)
-	tool(s, c, "check_login", "Prüft, ob Login ins Eltern-Portal funktioniert.",
+	tool(s, c, "check_login", "Checks that logging in to Eltern-Portal works.",
 		func(ctx context.Context, _ none) (loginStatus, error) {
 			if err := c.CheckLogin(ctx); err != nil {
 				return loginStatus{}, err
 			}
 			return loginStatus{Status: "ok"}, nil
 		})
-	tool(s, c, "get_schulaufgaben", "Schulaufgaben- und Prüfungstermine der Klasse (Datum, Beschreibung).",
-		func(ctx context.Context, _ kindArg) (portal.Termine, error) { return c.Schulaufgaben(ctx) })
-	tool(s, c, "get_termine", "Allgemeine Schultermine (Ferien, Veranstaltungen): Datum, Zeit, Beschreibung.",
-		func(ctx context.Context, _ none) (portal.Termine, error) { return c.Termine(ctx) })
-	tool(s, c, "get_schwarzes_brett", "Aushänge vom Schwarzen Brett (Titel, Zeitraum, Text; archiv=true für abgelaufene).",
-		func(ctx context.Context, _ none) (portal.SchwarzesBrett, error) { return c.SchwarzesBrett(ctx) })
-	tool(s, c, "get_vertretungsplan", "Vertretungsplan: Stand und Tage mit Vertretungen (Stunde, betroffene Lehrkraft, Vertretung, entfallenes Fach, Fach, Raum, Info).",
-		func(ctx context.Context, _ kindArg) (portal.Vertretungsplan, error) { return c.Vertretungsplan(ctx) })
-	tool(s, c, "list_elternbriefe", "Elternbriefe mit Nummer, Titel, Datum, Klassen, Bestätigungsstatus und ob eine Datei anhängt.",
-		func(ctx context.Context, _ kindArg) (portal.Elternbriefe, error) { return c.Elternbriefe(ctx) })
-	tool(s, c, "get_elternbrief", "Inhalt eines Elternbriefs als Text. nummer (exakt) oder titel (Teilstring, neuester Treffer) angeben.",
-		func(ctx context.Context, in briefArgs) (portal.ElternbriefInhalt, error) {
-			return c.Elternbrief(ctx, in.Nummer, in.Titel)
+	tool(s, c, "get_exams", "Exam dates of the class (Schulaufgaben): date, description.",
+		func(ctx context.Context, _ childArg) (portal.Events, error) { return c.Exams(ctx) })
+	tool(s, c, "get_events", "General school events (holidays, events): date, time, description.",
+		func(ctx context.Context, _ none) (portal.Events, error) { return c.Events(ctx) })
+	tool(s, c, "get_bulletin", "Bulletin board notices (Schwarzes Brett): title, period, text; archived=true for expired ones.",
+		func(ctx context.Context, _ none) (portal.Bulletin, error) { return c.Bulletin(ctx) })
+	tool(s, c, "get_substitutions", "Substitution plan (Vertretungsplan): last update and days with substitutions (lesson, absent teacher, substitute, cancelled subject, subject, room, info).",
+		func(ctx context.Context, _ childArg) (portal.SubstitutionPlan, error) { return c.SubstitutionPlan(ctx) })
+	tool(s, c, "list_letters", "Parent letters (Elternbriefe): number, title, date, classes, confirmation status, whether a file is attached.",
+		func(ctx context.Context, _ childArg) (portal.Letters, error) { return c.Letters(ctx) })
+	tool(s, c, "get_letter", "Content of a parent letter as text. Pass number (exact) or title (substring, newest match).",
+		func(ctx context.Context, in letterArgs) (portal.LetterContent, error) {
+			return c.Letter(ctx, in.Number, in.Title)
 		})
-	tool(s, c, "list_kinder", "Kinder im Account (ID, Name, Klasse). Namen für den kind-Parameter anderer Tools.",
-		func(ctx context.Context, _ none) (portal.Kinder, error) { return c.Kinder(ctx) })
-	tool(s, c, "list_nachrichten", "Nachrichten-Threads mit Fachlehrkräften (neueste zuerst, paginiert): Lehrkraft, Betreff, Datum, ungelesen, Anhang.",
-		func(ctx context.Context, in seiteArgs) (portal.Nachrichten, error) {
-			return c.Nachrichten(ctx, in.Seite)
+	tool(s, c, "list_children", "Children on the account (ID, name, class). Names for the child parameter of other tools.",
+		func(ctx context.Context, _ none) (portal.Children, error) { return c.Children(ctx) })
+	tool(s, c, "list_messages", "Message threads with teachers (newest first, paginated): teacher, subject, date, unread, attachment.",
+		func(ctx context.Context, in pageArgs) (portal.Messages, error) {
+			return c.Messages(ctx, in.Page)
 		})
-	tool(s, c, "get_nachricht", "Kompletter Thread mit allen Beiträgen und Anhängen als Text. Ungelesene nur mit ungelesen_oeffnen=true (markiert gelesen) — vorher User fragen.",
+	tool(s, c, "get_message", "Full thread with all posts and attachments as text. Unread threads only with open_unread=true (marks them read); ask the user first.",
 		func(ctx context.Context, in threadArgs) (portal.Thread, error) {
-			return c.Nachricht(ctx, in.ThreadID, in.UngelesenOeffnen)
+			return c.Message(ctx, in.ThreadID, in.OpenUnread)
 		})
-	tool(s, c, "list_lehrkraefte", "Lehrkräfte, denen man schreiben kann (ID, Name, Funktion).",
-		func(ctx context.Context, _ kindArg) (portal.Lehrkraefte, error) { return c.Lehrkraefte(ctx) })
+	tool(s, c, "list_teachers", "Teachers you can write to (ID, name, role).",
+		func(ctx context.Context, _ childArg) (portal.Teachers, error) { return c.Teachers(ctx) })
 	if !allowWrite {
 		return s
 	}
-	tool(s, c, "elternbrief_bestaetigen", "Bestätigt den Empfang eines Elternbriefs im Portal (für die Schule sichtbar). Vorher User fragen.",
-		func(ctx context.Context, in nummerArgs) (portal.Elternbrief, error) {
-			return c.ElternbriefBestaetigen(ctx, in.Nummer)
+	tool(s, c, "confirm_letter", "Confirms receipt of a parent letter in the portal (visible to the school). Ask the user first.",
+		func(ctx context.Context, in numberArgs) (portal.Letter, error) {
+			return c.ConfirmLetter(ctx, in.Number)
 		})
-	tool(s, c, "send_nachricht", "Antwortet in einem bestehenden Thread an eine Lehrkraft. Sendet sofort — Text vorher mit User abstimmen.",
-		func(ctx context.Context, in antwortArgs) (portal.Thread, error) {
-			return c.Antworten(ctx, in.ThreadID, in.Text)
+	tool(s, c, "reply", "Replies in an existing teacher thread. Sends immediately; agree on the text with the user first.",
+		func(ctx context.Context, in replyArgs) (portal.Thread, error) {
+			return c.Reply(ctx, in.ThreadID, in.Text)
 		})
-	tool(s, c, "neue_nachricht", "Startet eine neue Konversation mit einer Lehrkraft. Sendet sofort — Text vorher mit User abstimmen.",
-		func(ctx context.Context, in neuArgs) (portal.Nachricht, error) {
-			return c.NeueNachricht(ctx, in.LehrerID, in.Betreff, in.Text)
+	tool(s, c, "new_message", "Starts a new conversation with a teacher. Sends immediately; agree on the text with the user first.",
+		func(ctx context.Context, in newMessageArgs) (portal.Message, error) {
+			return c.NewMessage(ctx, in.TeacherID, in.Subject, in.Text)
 		})
-	tool(s, c, "klassenleitung_anfrage", "Sendet eine Kontaktanfrage an die Klassenleitung. Sendet sofort — vorher mit User abstimmen.",
-		func(ctx context.Context, in anfrageArgs) (sentStatus, error) {
-			if err := c.KlassenleitungAnfrage(ctx, in.Kontaktwunsch, in.Grund); err != nil {
+	tool(s, c, "contact_class_teacher", "Sends a contact request to the class teacher (Klassenleitung). Sends immediately; agree with the user first.",
+		func(ctx context.Context, in contactArgs) (sentStatus, error) {
+			if err := c.ContactClassTeacher(ctx, in.RequestType, in.Reason); err != nil {
 				return sentStatus{}, err
 			}
-			return sentStatus{Status: "gesendet"}, nil
+			return sentStatus{Status: "sent"}, nil
 		})
 	return s
 }

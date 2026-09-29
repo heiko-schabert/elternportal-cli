@@ -9,36 +9,36 @@ import (
 	"testing"
 )
 
-func TestParseElternbriefe(t *testing.T) {
-	got := parseElternbriefe(fixture(t, "elternbriefe.html"))
-	want := []Elternbrief{
-		{Nummer: 134, Titel: "Wandertag", Datum: "20.09.2026, 17:30", Klassen: "6C, 6D", HatDatei: true, downloadURL: "aktuelles/get_file/?repo=134&csrf=c0ffee", id: "1300", inline: "Anbei die Infos zum Wandertag."},
-		{Nummer: 133, Titel: "Elternabend", Datum: "15.09.2026, 08:00", Klassen: "6C", Bestaetigt: true, id: "1299", inline: "Sehr geehrte Eltern,\nder Elternabend findet am 1.10. statt.\nMit freundlichen Grüßen\ni.A."},
-		{Nummer: 120, Titel: "Elternabend Nachtrag", Datum: "01.09.2026, 08:00", Klassen: "6C", Bestaetigt: true, id: "1200", inline: "Raum 101."},
+func TestParseLetters(t *testing.T) {
+	got := parseLetters(fixture(t, "elternbriefe.html"))
+	want := []Letter{
+		{Number: 134, Title: "Wandertag", Date: "20.09.2026, 17:30", Classes: "6C, 6D", HasFile: true, downloadURL: "aktuelles/get_file/?repo=134&csrf=c0ffee", id: "1300", inline: "Anbei die Infos zum Wandertag."},
+		{Number: 133, Title: "Elternabend", Date: "15.09.2026, 08:00", Classes: "6C", Confirmed: true, id: "1299", inline: "Sehr geehrte Eltern,\nder Elternabend findet am 1.10. statt.\nMit freundlichen Grüßen\ni.A."},
+		{Number: 120, Title: "Elternabend Nachtrag", Date: "01.09.2026, 08:00", Classes: "6C", Confirmed: true, id: "1200", inline: "Raum 101."},
 	}
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("got %+v\nwant %+v", got, want)
 	}
 }
 
-func TestFindBrief(t *testing.T) {
-	bs := parseElternbriefe(fixture(t, "elternbriefe.html"))
-	if b, err := findBrief(bs, 120, ""); err != nil || b.Nummer != 120 {
-		t.Errorf("by number: %v, %v", b.Nummer, err)
+func TestFindLetter(t *testing.T) {
+	bs := parseLetters(fixture(t, "elternbriefe.html"))
+	if b, err := findLetter(bs, 120, ""); err != nil || b.Number != 120 {
+		t.Errorf("by number: %v, %v", b.Number, err)
 	}
 	// Title match prefers the newest letter.
-	if b, err := findBrief(bs, 0, "elternABEND"); err != nil || b.Nummer != 133 {
-		t.Errorf("by title: %v, %v", b.Nummer, err)
+	if b, err := findLetter(bs, 0, "elternABEND"); err != nil || b.Number != 133 {
+		t.Errorf("by title: %v, %v", b.Number, err)
 	}
-	if _, err := findBrief(bs, 999, ""); err == nil || !strings.Contains(err.Error(), "#134") {
+	if _, err := findLetter(bs, 999, ""); err == nil || !strings.Contains(err.Error(), "#134") {
 		t.Errorf("not found should list available: %v", err)
 	}
-	if _, err := findBrief(bs, 0, ""); err == nil {
-		t.Error("want error without nummer and titel")
+	if _, err := findLetter(bs, 0, ""); err == nil {
+		t.Error("want error without number and title")
 	}
 }
 
-func briefPortal(t *testing.T, download string) *Client {
+func letterPortal(t *testing.T, download string) *Client {
 	b, err := os.ReadFile("testdata/elternbriefe.html")
 	if err != nil {
 		t.Fatal(err)
@@ -49,31 +49,31 @@ func briefPortal(t *testing.T, download string) *Client {
 	}).client("p")
 }
 
-func TestElternbriefInline(t *testing.T) {
-	got, err := briefPortal(t, "").Elternbrief(context.Background(), 133, "")
+func TestLetterInline(t *testing.T) {
+	got, err := letterPortal(t, "").Letter(context.Background(), 133, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if got.Inhalt != "Sehr geehrte Eltern,\nder Elternabend findet am 1.10. statt.\nMit freundlichen Grüßen\ni.A." {
-		t.Fatalf("got %q", got.Inhalt)
+	if got.Content != "Sehr geehrte Eltern,\nder Elternabend findet am 1.10. statt.\nMit freundlichen Grüßen\ni.A." {
+		t.Fatalf("got %q", got.Content)
 	}
 }
 
-func TestElternbriefDownloadHTML(t *testing.T) {
-	_, err := briefPortal(t, "<html>Fehler</html>").Elternbrief(context.Background(), 134, "")
+func TestLetterDownloadHTML(t *testing.T) {
+	_, err := letterPortal(t, "<html>Fehler</html>").Letter(context.Background(), 134, "")
 	if err == nil || !strings.Contains(err.Error(), "HTML") {
 		t.Fatalf("err = %v, want HTML download error", err)
 	}
 }
 
-func TestElternbriefOhnePdftotext(t *testing.T) {
+func TestLetterWithoutPdftotext(t *testing.T) {
 	t.Setenv("PATH", "")
-	got, err := briefPortal(t, "%PDF-1.4 dummy").Elternbrief(context.Background(), 134, "")
+	got, err := letterPortal(t, "%PDF-1.4 dummy").Letter(context.Background(), 134, "")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(got.Inhalt, "pdftotext nicht installiert") {
-		t.Fatalf("got %q", got.Inhalt)
+	if !strings.Contains(got.Content, "pdftotext not installed") {
+		t.Fatalf("got %q", got.Content)
 	}
 }
 
@@ -103,7 +103,7 @@ func TestPDFText(t *testing.T) {
 	}
 }
 
-func TestElternbriefBestaetigen(t *testing.T) {
+func TestConfirmLetter(t *testing.T) {
 	b, err := os.ReadFile("testdata/elternbriefe.html")
 	if err != nil {
 		t.Fatal(err)
@@ -115,20 +115,20 @@ func TestElternbriefBestaetigen(t *testing.T) {
 			f.pages["/aktuelles/elternbriefe"] = strings.Replace(string(b), "noch nicht bestätigt", "Empfang bestätigt.", 1)
 		}
 	}
-	got, err := f.client("p").ElternbriefBestaetigen(context.Background(), 134)
+	got, err := f.client("p").ConfirmLetter(context.Background(), 134)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !got.Bestaetigt || f.lastQuery["/api/elternbrief_bestaetigen.php"] != "eb=1300" {
+	if !got.Confirmed || f.lastQuery["/api/elternbrief_bestaetigen.php"] != "eb=1300" {
 		t.Fatalf("got %+v, query %q", got, f.lastQuery["/api/elternbrief_bestaetigen.php"])
 	}
 }
 
-func TestElternbriefBestaetigenSchonBestaetigt(t *testing.T) {
+func TestConfirmLetterAlreadyConfirmed(t *testing.T) {
 	b, _ := os.ReadFile("testdata/elternbriefe.html")
 	f := newFakePortal(t, map[string]string{"/aktuelles/elternbriefe": string(b)})
-	got, err := f.client("p").ElternbriefBestaetigen(context.Background(), 133)
-	if err != nil || !got.Bestaetigt {
+	got, err := f.client("p").ConfirmLetter(context.Background(), 133)
+	if err != nil || !got.Confirmed {
 		t.Fatalf("got %+v %v", got, err)
 	}
 	if f.hits["/api/elternbrief_bestaetigen.php"] != 0 {

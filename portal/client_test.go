@@ -91,13 +91,13 @@ func (f *fakePortal) serve(w http.ResponseWriter, r *http.Request) {
 	}
 	body, ok := f.pages[r.URL.Path]
 	if !ok {
-		body = kinderPage(f.child)
+		body = childrenPage(f.child)
 	}
 	w.Header().Set("Content-Type", http.DetectContentType([]byte(body)))
 	io.WriteString(w, body)
 }
 
-func kinderPage(selected string) string {
+func childrenPage(selected string) string {
 	opt := func(id, name string) string {
 		sel := ""
 		if id == selected {
@@ -221,7 +221,7 @@ func TestContentModulAus(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, err = content(b, "text/html; charset=utf-8", "/service/vertretungsplan")
-	if err == nil || !strings.Contains(err.Error(), "nicht aktiv") {
+	if err == nil || !strings.Contains(err.Error(), "module disabled") {
 		t.Fatalf("err = %v, want module-inactive error", err)
 	}
 }

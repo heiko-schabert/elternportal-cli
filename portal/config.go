@@ -59,7 +59,7 @@ func LoadConfig(getenv func(string) string, envFile string) (Config, error) {
 	}
 	if len(missing) > 0 {
 		slices.Sort(missing)
-		return Config{}, fmt.Errorf("Config fehlt: %s (Env-Var oder %s)", strings.Join(missing, ", "), envFile)
+		return Config{}, fmt.Errorf("missing config: %s (environment or %s)", strings.Join(missing, ", "), envFile)
 	}
 	return c, nil
 }

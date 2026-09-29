@@ -38,7 +38,7 @@ func TestTools(t *testing.T) {
 		got = append(got, tl.Name)
 	}
 	slices.Sort(got)
-	want := []string{"check_login", "get_elternbrief", "get_nachricht", "get_schulaufgaben", "get_schwarzes_brett", "get_termine", "get_vertretungsplan", "list_elternbriefe", "list_kinder", "list_lehrkraefte", "list_nachrichten"}
+	want := []string{"check_login", "get_bulletin", "get_events", "get_exams", "get_letter", "get_message", "get_substitutions", "list_children", "list_letters", "list_messages", "list_teachers"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
@@ -55,18 +55,18 @@ func TestToolError(t *testing.T) {
 	}
 }
 
-func TestKindParamInSchema(t *testing.T) {
+func TestChildParamInSchema(t *testing.T) {
 	cs := connect(t, portal.New(portal.Config{URL: "http://127.0.0.1:1"}), false)
 	res, err := cs.ListTools(context.Background(), nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 	for _, tl := range res.Tools {
-		if tl.Name != "get_elternbrief" {
+		if tl.Name != "get_letter" {
 			continue
 		}
 		b, _ := json.Marshal(tl.InputSchema)
-		for _, p := range []string{`"kind"`, `"nummer"`} {
+		for _, p := range []string{`"child"`, `"number"`} {
 			if !strings.Contains(string(b), p) {
 				t.Errorf("schema %s lacks %s", b, p)
 			}
@@ -86,10 +86,10 @@ func TestWriteToolsGated(t *testing.T) {
 		}
 		return n
 	}
-	if slices.Contains(names(false), "elternbrief_bestaetigen") {
+	if slices.Contains(names(false), "confirm_letter") {
 		t.Fatal("write tool registered without allowWrite")
 	}
-	for _, n := range []string{"elternbrief_bestaetigen", "send_nachricht", "neue_nachricht", "klassenleitung_anfrage"} {
+	for _, n := range []string{"confirm_letter", "reply", "new_message", "contact_class_teacher"} {
 		if slices.Contains(names(false), n) {
 			t.Errorf("%s registered without allowWrite", n)
 		}

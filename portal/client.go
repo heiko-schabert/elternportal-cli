@@ -21,7 +21,7 @@ import (
 )
 
 // ErrLogin means the portal rejected the credentials.
-var ErrLogin = errors.New("Login fehlgeschlagen, Zugangsdaten prüfen")
+var ErrLogin = errors.New("login failed, check credentials")
 
 const userAgent = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
 
@@ -33,7 +33,7 @@ type Client struct {
 	mu       sync.Mutex
 	loggedIn bool
 	opMu     sync.Mutex // spans child selection plus the requests using it
-	kinder   []Kind
+	children []Child
 	selected string // child active in the portal session
 	want     string // child the current operation needs
 }
@@ -63,7 +63,7 @@ func (c *Client) login(ctx context.Context) error {
 	}
 	csrf, ok := doc.Find(`input[name="csrf"]`).Attr("value")
 	if !ok {
-		return errors.New("Login-Seite: CSRF-Token fehlt")
+		return errors.New("login page: CSRF token missing")
 	}
 	body, ct, err = c.do(ctx, http.MethodPost, "/includes/project/auth/login.php", url.Values{
 		"csrf": {csrf}, "username": {c.cfg.User}, "password": {c.cfg.Password}, "go_to": {""},
@@ -78,9 +78,9 @@ func (c *Client) login(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	c.kinder, c.selected = parseKinder(doc.Selection)
+	c.children, c.selected = parseChildren(doc.Selection)
 	c.loggedIn = true
-	return c.applyKind(ctx)
+	return c.applyChild(ctx)
 }
 
 // isLoginPage detects the login form; the portal answers expired sessions
@@ -136,7 +136,7 @@ func (c *Client) fetch(ctx context.Context, path string) ([]byte, string, error)
 	}
 	b, ct, err = c.do(ctx, http.MethodGet, path, nil)
 	if err == nil && isLoginPage(b) {
-		return nil, "", fmt.Errorf("%s: Session nach Re-Login ungültig", path)
+		return nil, "", fmt.Errorf("%s: session invalid after re-login", path)
 	}
 	return b, ct, err
 }
@@ -178,11 +178,11 @@ func content(b []byte, contentType, path string) (*goquery.Selection, error) {
 	}
 	s := doc.Find("#asam_content")
 	if s.Length() == 0 {
-		return nil, fmt.Errorf("%s: #asam_content fehlt, Portal-Layout geändert?", path)
+		return nil, fmt.Errorf("%s: #asam_content missing, portal layout changed?", path)
 	}
 	// Schools can disable modules; the page then renders an empty frame.
 	if s.Children().Length() == 0 && strings.TrimSpace(s.Text()) == "" {
-		return nil, fmt.Errorf("%s: Seite leer, Modul an dieser Schule nicht aktiv", path)
+		return nil, fmt.Errorf("%s: page empty, module disabled at this school", path)
 	}
 	return s, nil
 }
@@ -224,14 +224,14 @@ func (c *Client) download(ctx context.Context, href string) (string, error) {
 	}
 	sniffed := http.DetectContentType(raw)
 	if strings.Contains(ct, "html") || strings.Contains(sniffed, "html") {
-		return "", fmt.Errorf("%s: Download lieferte HTML statt Datei", path)
+		return "", fmt.Errorf("%s: download returned HTML instead of a file", path)
 	}
 	if !bytes.HasPrefix(raw, []byte("%PDF-")) {
-		return fmt.Sprintf("(Anhang %s, kein Text)", sniffed), nil
+		return fmt.Sprintf("(attachment %s, no text)", sniffed), nil
 	}
 	txt, err := pdfText(ctx, raw)
 	if errors.Is(err, exec.ErrNotFound) {
-		return "(pdftotext nicht installiert, PDF-Text nicht verfügbar)", nil
+		return "(pdftotext not installed, PDF text unavailable)", nil
 	}
 	return txt, err
 }
@@ -262,7 +262,7 @@ func (c *Client) postMultipart(ctx context.Context, path string, fields map[stri
 	resp, err := c.http.Do(req)
 	if err != nil {
 		// The portal may have stored the message before the connection failed.
-		return fmt.Errorf("POST %s: %w; Status unbekannt, im Portal prüfen vor erneutem Senden", path, err)
+		return fmt.Errorf("POST %s: %w; status unknown, check the portal before sending again", path, err)
 	}
 	defer resp.Body.Close()
 	body, err := io.ReadAll(resp.Body)
@@ -274,7 +274,7 @@ func (c *Client) postMultipart(ctx context.Context, path string, fields map[stri
 	}
 	if isLoginPage(body) {
 		c.loggedIn = false
-		return fmt.Errorf("POST %s: Session abgelaufen, nicht gesendet; erneut versuchen", path)
+		return fmt.Errorf("POST %s: session expired, not sent; try again", path)
 	}
 	return nil
 }

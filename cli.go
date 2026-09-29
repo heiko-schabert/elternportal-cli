@@ -142,13 +142,13 @@ func run(ctx context.Context, srv *mcp.Server, ready func() error, args []string
 	}
 	root := &cobra.Command{
 		Use:   "elternportal-cli",
-		Short: "Eltern-Portal im Terminal; Ausgabe als JSON",
-		Long: `Eltern-Portal im Terminal; Ausgabe als JSON.
+		Short: "Eltern-Portal from the terminal; JSON output",
+		Long: `Eltern-Portal from the terminal; JSON output.
 
-Zugangsdaten: ELTERNPORTAL_URL, ELTERNPORTAL_USER, ELTERNPORTAL_PASSWORD
-als Env-Variablen oder in ~/.mcp-server-config/elternportal_mcp/.env.
-Schreibbefehle nur mit ELTERNPORTAL_ALLOW_WRITE=1.`,
-		Example:       "  elternportal-cli elternbrief --nummer 49 | jq -r .inhalt",
+Credentials: ELTERNPORTAL_URL, ELTERNPORTAL_USER, ELTERNPORTAL_PASSWORD
+as environment variables or in ~/.mcp-server-config/elternportal_mcp/.env.
+Write commands require ELTERNPORTAL_ALLOW_WRITE=1.`,
+		Example:       "  elternportal-cli letter --number 49 | jq -r .content",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
@@ -162,10 +162,10 @@ Schreibbefehle nur mit ELTERNPORTAL_ALLOW_WRITE=1.`,
 	var addr string
 	mcpCmd := &cobra.Command{
 		Use:   "mcp",
-		Short: "MCP-Server für KI-Assistenten (stdio oder HTTP)",
-		Long: `MCP-Server für KI-Assistenten. Standard ist stdio; mit --http als
-Streamable-HTTP-Server. Der HTTP-Modus hat keine eigene Authentifizierung:
-nur an ein privates Interface binden, z.B. die Tailscale-IP.`,
+		Short: "MCP server for AI assistants (stdio or HTTP)",
+		Long: `MCP server for AI assistants. Defaults to stdio; with --http it serves
+Streamable HTTP. HTTP mode has no authentication of its own: bind it to a
+private interface only, e.g. the Tailscale IP.`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := ready(); err != nil {
@@ -174,11 +174,11 @@ nur an ein privates Interface binden, z.B. die Tailscale-IP.`,
 			if addr == "" {
 				return srv.Run(cmd.Context(), &mcp.StdioTransport{})
 			}
-			fmt.Fprintf(cmd.ErrOrStderr(), "MCP über HTTP auf %s\n", addr)
+			fmt.Fprintf(cmd.ErrOrStderr(), "MCP over HTTP on %s\n", addr)
 			return http.ListenAndServe(addr, httpHandler(srv))
 		},
 	}
-	mcpCmd.Flags().StringVar(&addr, "http", "", "Adresse für Streamable HTTP, z.B. 100.64.0.1:8080")
+	mcpCmd.Flags().StringVar(&addr, "http", "", "address for Streamable HTTP, e.g. 100.64.0.1:8080")
 	root.AddCommand(mcpCmd)
 	root.SetArgs(args)
 	root.SetOut(stdout)
