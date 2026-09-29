@@ -1,3 +1,4 @@
 /elternportal-cli
 .devenv*
 devenv.local.nix
+.direnv
