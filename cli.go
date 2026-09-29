@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/http"
 	"slices"
 	"strings"
 
@@ -158,17 +159,27 @@ Schreibbefehle nur mit ELTERNPORTAL_ALLOW_WRITE=1.`,
 		}
 		root.AddCommand(cmd)
 	}
-	root.AddCommand(&cobra.Command{
+	var addr string
+	mcpCmd := &cobra.Command{
 		Use:   "mcp",
-		Short: "MCP-Server über stdio für KI-Assistenten",
-		Args:  cobra.NoArgs,
+		Short: "MCP-Server für KI-Assistenten (stdio oder HTTP)",
+		Long: `MCP-Server für KI-Assistenten. Standard ist stdio; mit --http als
+Streamable-HTTP-Server. Der HTTP-Modus hat keine eigene Authentifizierung:
+nur an ein privates Interface binden, z.B. die Tailscale-IP.`,
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			if err := ready(); err != nil {
 				return err
 			}
-			return srv.Run(cmd.Context(), &mcp.StdioTransport{})
+			if addr == "" {
+				return srv.Run(cmd.Context(), &mcp.StdioTransport{})
+			}
+			fmt.Fprintf(cmd.ErrOrStderr(), "MCP über HTTP auf %s\n", addr)
+			return http.ListenAndServe(addr, httpHandler(srv))
 		},
-	})
+	}
+	mcpCmd.Flags().StringVar(&addr, "http", "", "Adresse für Streamable HTTP, z.B. 100.64.0.1:8080")
+	root.AddCommand(mcpCmd)
 	root.SetArgs(args)
 	root.SetOut(stdout)
 	root.SetErr(stderr)
@@ -176,4 +187,8 @@ Schreibbefehle nur mit ELTERNPORTAL_ALLOW_WRITE=1.`,
 		return fail(err)
 	}
 	return 0
+}
+
+func httpHandler(srv *mcp.Server) http.Handler {
+	return mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return srv }, nil)
 }

@@ -13,6 +13,7 @@ import (
 
 	"elternportal-cli/portal"
 
+	"github.com/modelcontextprotocol/go-sdk/mcp"
 	"github.com/spf13/cobra"
 )
 
@@ -167,5 +168,23 @@ func TestConfigErrorOnlyOnCall(t *testing.T) {
 	}
 	if code := run(context.Background(), newServer(c, false), ready, []string{"elternbriefe"}, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "Config fehlt") {
 		t.Fatalf("call: exit %d, stderr %q", code, errOut.String())
+	}
+}
+
+func TestMCPOverHTTP(t *testing.T) {
+	srv := httptest.NewServer(httpHandler(newServer(portal.New(portal.Config{URL: "http://127.0.0.1:1"}), false)))
+	t.Cleanup(srv.Close)
+	ctx := context.Background()
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "test"}, nil).Connect(ctx, &mcp.StreamableClientTransport{Endpoint: srv.URL}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+	res, err := cs.ListTools(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Tools) == 0 {
+		t.Fatal("no tools over HTTP")
 	}
 }

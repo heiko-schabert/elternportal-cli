@@ -44,3 +44,38 @@ claude mcp add -s user elternportal -- ~/go/bin/elternportal-cli mcp
 ```
 
 Tool-Namen im MCP-Modus: `check_login`, `list_kinder`, `get_schulaufgaben`, `get_termine`, `get_schwarzes_brett`, `get_vertretungsplan`, `list_elternbriefe`, `get_elternbrief`, `list_nachrichten`, `get_nachricht`, `list_lehrkraefte`; mit Schreibrecht zusätzlich `elternbrief_bestaetigen`, `send_nachricht`, `neue_nachricht`, `klassenleitung_anfrage`.
+
+### Remote (HTTP)
+
+```bash
+elternportal-cli mcp --http 100.64.0.1:8080
+```
+
+Streamable HTTP ohne eigene Authentifizierung: nur an ein privates Interface binden (z.B. Tailscale-IP), nie öffentlich. Client: `claude mcp add -s user -t http elternportal http://<host>:8080/`.
+
+Als systemd-Dienst kommen die Zugangsdaten über `EnvironmentFile` (Datei `root:root`, `0600`; mit sops-nix/agenix erzeugbar):
+
+```ini
+# /etc/systemd/system/elternportal-cli.service
+[Unit]
+After=network-online.target tailscaled.service
+Wants=network-online.target
+
+[Service]
+ExecStart=/usr/local/bin/elternportal-cli mcp --http 100.64.0.1:8080
+EnvironmentFile=/etc/elternportal-cli.env
+DynamicUser=yes
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```ini
+# /etc/elternportal-cli.env
+ELTERNPORTAL_URL=https://schule.eltern-portal.org
+ELTERNPORTAL_USER=eltern@example.org
+ELTERNPORTAL_PASSWORD='geheim$mit$dollar'
+```
+
+`EnvironmentFile` expandiert kein `$`; Werte mit Leerzeichen oder Backslash in einfache Anführungszeichen setzen. `pdftotext` muss im `PATH` des Dienstes liegen (NixOS: `path = [ pkgs.poppler-utils ];`). Schreibbefehle bleiben aus, solange `ELTERNPORTAL_ALLOW_WRITE=1` fehlt.
