@@ -6,10 +6,10 @@ self:
   ...
 }:
 let
-  cfg = config.services.elternportal-mcp;
+  cfg = config.services.elternportal-cli;
 in
 {
-  options.services.elternportal-mcp = {
+  options.services.elternportal-cli = {
     enable = lib.mkEnableOption "Eltern-Portal MCP server over Streamable HTTP";
     package = lib.mkOption {
       type = lib.types.package;
@@ -27,7 +27,7 @@ in
   };
 
   config = lib.mkIf cfg.enable {
-    systemd.services.elternportal-mcp = {
+    systemd.services.elternportal-cli = {
       wantedBy = [ "multi-user.target" ];
       after = [ "network-online.target" ];
       wants = [ "network-online.target" ];
