@@ -17,7 +17,10 @@
       version = self.shortRev or self.dirtyShortRev or "dev";
       vendorHash = "sha256-XRhuWUmB8/a1Iu/Y+xA7yKob2zXAlIrzfKS1RrLYQhw=";
     in
-    flake-utils.lib.eachDefaultSystem (
+    {
+      nixosModules.default = import ./module.nix self;
+    }
+    // flake-utils.lib.eachDefaultSystem (
       system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
