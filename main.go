@@ -9,10 +9,26 @@ import (
 	"log/slog"
 	"net/url"
 	"os"
+	"runtime/debug"
 	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
+
+// version is set by the Nix build via -ldflags -X; go install fills it from build info.
+var version string
+
+func versionString() string {
+	if version != "" {
+		return version
+	}
+
+	if bi, ok := debug.ReadBuildInfo(); ok {
+		return bi.Main.Version
+	}
+
+	return "(devel)"
+}
 
 type none struct{}
 
@@ -118,7 +134,7 @@ func toolFiles[In, Out any](s *mcp.Server, c *portal.Client, name, desc string, 
 }
 
 func newServer(c *portal.Client, allowWrite bool) *mcp.Server {
-	s := mcp.NewServer(&mcp.Implementation{Name: "elternportal", Version: "v0.1.0"}, nil)
+	s := mcp.NewServer(&mcp.Implementation{Name: "elternportal", Version: versionString()}, nil)
 	tool(s, c, "check_login", "Checks that logging in to Eltern-Portal works.",
 		func(ctx context.Context, _ none) (loginStatus, error) {
 			if err := c.CheckLogin(ctx); err != nil {

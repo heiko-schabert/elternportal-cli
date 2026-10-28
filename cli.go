@@ -141,6 +141,7 @@ Credentials: ELTERNPORTAL_URL, ELTERNPORTAL_USER, ELTERNPORTAL_PASSWORD
 as environment variables or in ~/.config/elternportal/env.
 Write commands require ELTERNPORTAL_ALLOW_WRITE=1.`,
 		Example:       "  elternportal-cli letter --number 49\n  elternportal-cli letters --json | jq .letters[0]",
+		Version:       versionString(),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}

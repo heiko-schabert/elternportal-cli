@@ -34,6 +34,7 @@
           ldflags = [
             "-s"
             "-w"
+            "-X main.version=${version}"
           ];
           nativeBuildInputs = [ pkgs.makeWrapper ];
           # Lets TestPDFText run instead of skipping.
