@@ -15,7 +15,7 @@
     }:
     let
       version = self.shortRev or self.dirtyShortRev or "dev";
-      vendorHash = "sha256-XRhuWUmB8/a1Iu/Y+xA7yKob2zXAlIrzfKS1RrLYQhw=";
+      vendorHash = "sha256-H2rKpVatIavWPtadhET/5l7JL8mmfirBP4HzS0Tuge8=";
     in
     {
       nixosModules.default = import ./module.nix self;
